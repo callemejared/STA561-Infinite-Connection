@@ -6,53 +6,63 @@
     "form": 339,
     "theme": 138
   },
-  "total_candidates_generated": 100,
-  "accepted_count": 84,
-  "acceptance_rate": 0.84,
-  "rejected_by_structure": 0,
-  "rejected_by_style": 5,
-  "rejected_by_ambiguity": 10,
+  "target_accepted_count": 10000,
+  "total_candidates_generated": 12399,
+  "accepted_count": 10000,
+  "acceptance_rate": 0.8065166545689169,
+  "target_met": true,
+  "rejected_by_structure": 122,
+  "rejected_by_style": 861,
+  "rejected_by_ambiguity": 969,
   "rejected_by_duplicate": 0,
   "rejected_by_multi_solution": 0,
-  "rejected_by_low_cohesion": 1,
+  "rejected_by_low_cohesion": 447,
   "rejected_by_high_confusion": 0,
   "rejected_by_internal_repeat": 0,
   "rejected_by_generation_error": 0,
   "candidate_group_type_counts": {
-    "theme": 121,
-    "semantic": 124,
-    "form": 132,
-    "anagram": 23
+    "theme": 15494,
+    "semantic": 15542,
+    "form": 15489,
+    "anagram": 3071
   },
   "accepted_group_type_counts": {
-    "theme": 103,
-    "semantic": 102,
-    "form": 110,
-    "anagram": 21
+    "theme": 12482,
+    "semantic": 12556,
+    "form": 12386,
+    "anagram": 2576
   },
-  "average_within_group_similarity": 0.32248882696694653,
-  "average_cross_group_similarity": 0.0034984497199099457,
+  "average_within_group_similarity": 0.3387109843372754,
+  "average_cross_group_similarity": 0.003088386346661435,
   "average_solution_count": 1.0,
-  "top_structure_reasons": {},
+  "top_structure_reasons": {
+    "each word must be used exactly once across the four groups": 122,
+    "all_words must not repeat words": 122
+  },
   "top_style_reasons": {
-    "group 4 label 'BODY PARTS IN “HEAD, SHOULDERS, KNEES AND TOES”' is too revealing because it appears in 'HEAD'": 1,
-    "group 4 label 'HAIR SALON FIXTURES' is too revealing because it appears in 'CHAIR'": 1,
-    "group 4 label '“EXTRA VIRGIN OLIVE OIL”' is too revealing because it appears in 'EXTRA'": 1,
-    "group 3 label 'THINGS THAT SWING' is too revealing because it appears in 'SWING'": 1,
-    "group 3 label 'WORDS REPEATED IN “MISS MARY MACK”' is too revealing because it appears in 'MACK'": 1
+    "group 3 label 'BODY PARTS IN “HEAD, SHOULDERS, KNEES AND TOES”' is too revealing because it appears in 'HEAD'": 33,
+    "group 1 label 'BODY PARTS IN “HEAD, SHOULDERS, KNEES AND TOES”' is too revealing because it appears in 'HEAD'": 31,
+    "group 2 label 'BODY PARTS IN “HEAD, SHOULDERS, KNEES AND TOES”' is too revealing because it appears in 'HEAD'": 30,
+    "group 3 label 'FEATURED IN “JACK AND THE BEANSTALK”' is too revealing because it appears in 'JACK'": 29,
+    "group 4 label 'BODY PARTS IN “HEAD, SHOULDERS, KNEES AND TOES”' is too revealing because it appears in 'HEAD'": 27
   },
   "top_ambiguity_reasons": {
-    "group 2 accidentally creates a shared ending pattern outside the intended mechanism": 4,
-    "group 1 accidentally creates a shared ending pattern outside the intended mechanism": 4,
-    "cross-group confusion score is 2, which suggests an alternate grouping is too visible": 1,
-    "words from multiple groups all end with 'ING', which suggests an alternate grouping": 1,
-    "group 4 accidentally creates a shared ending pattern outside the intended mechanism": 1
+    "group 1 accidentally creates a shared ending pattern outside the intended mechanism": 252,
+    "group 2 accidentally creates a shared ending pattern outside the intended mechanism": 235,
+    "group 4 accidentally creates a shared ending pattern outside the intended mechanism": 232,
+    "group 3 accidentally creates a shared ending pattern outside the intended mechanism": 229,
+    "cross-group confusion score is 2, which suggests an alternate grouping is too visible": 44
   },
   "top_duplicate_reasons": {},
   "top_multi_solution_reasons": {},
   "top_low_cohesion_reasons": {
-    "average within-group similarity (0.178) is below the threshold (0.180)": 1
+    "average within-group similarity (0.169) is below the threshold (0.180)": 18,
+    "average within-group similarity (0.177) is below the threshold (0.180)": 15,
+    "average within-group similarity (0.179) is below the threshold (0.180)": 15,
+    "average within-group similarity (0.175) is below the threshold (0.180)": 13,
+    "average within-group similarity (0.161) is below the threshold (0.180)": 12
   },
   "top_high_confusion_reasons": {},
-  "top_generation_errors": {}
+  "top_generation_errors": {},
+  "candidate_budget": 20000
 }

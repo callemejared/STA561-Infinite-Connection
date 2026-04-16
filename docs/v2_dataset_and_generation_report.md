@@ -1,8 +1,8 @@
-# V2 Dataset And Generation Report
+# V3 Dataset And Generation Report
 
 ## Dataset Summary
 
-The v2 pipeline uses the HuggingFace `tm21cy/NYT-Connections` dataset and normalizes it into `data/processed/nyt_official.json`.
+The v3 pipeline uses the HuggingFace `tm21cy/NYT-Connections` dataset and normalizes it into `data/processed/nyt_official.json`.
 
 Statistics from the checked-in `data/processed/nyt_dataset_stats.json`:
 
@@ -42,53 +42,44 @@ Most frequent category labels:
 
 ## Generation Summary
 
-The checked-in `data/generated/generation_report_v2.json` comes from the sanity run:
+The checked-in `data/generated/generation_report_v2.json` now comes from the formal library-generation run:
 
 ```bash
-python src/batch_generate_and_score.py --num-candidates 100 --seed 561 --progress-every 25
+python src/batch_generate_and_score.py --target-accepted 10000 --num-candidates 13000 --seed 561
 ```
 
 Observed results:
 
-- total candidates: 100
-- accepted puzzles: 84
-- acceptance rate: 84%
-- rejected by structure: 0
-- rejected by style: 5
-- rejected by ambiguity: 10
+- target accepted puzzles: 10,000
+- target met: `True`
+- candidate budget chosen by the script: 20,000
+- candidates actually generated before stopping: 12,399
+- accepted puzzles: 10,000
+- acceptance rate: 80.65%
+- rejected by structure: 122
+- rejected by style: 861
+- rejected by ambiguity: 969
 - rejected by duplicate: 0
 - rejected by multi-solution: 0
-- rejected by low cohesion: 1
+- rejected by low cohesion: 447
 - rejected by high confusion: 0
 - rejected by internal repeat: 0
 
 Accepted-puzzle averages:
 
-- average within-group similarity: 0.3225
-- average cross-group similarity: 0.0035
+- average within-group similarity: about 0.339
+- average cross-group similarity: about 0.003
 - average solution count: 1.0
-
-Mechanism mix during the sanity run:
-
-- candidate groups:
-  - theme: 121
-  - semantic: 124
-  - form: 132
-  - anagram: 23
-- accepted groups:
-  - theme: 103
-  - semantic: 102
-  - form: 110
-  - anagram: 21
 
 ## Interpretation
 
-- The official dataset is dominated by semantic categories, with smaller but still useful theme and wordplay slices. That supports the v2 design choice of requiring at least one semantic group and one theme group, then filling the remaining slots with theme, form, or anagram mechanisms.
-- The current validator is mostly rejecting puzzles for style leakage or cross-group ambiguity, which is a healthy sign: the generator is producing structurally valid puzzles, but some labels or surface patterns still need filtering.
-- The multi-solution count stayed at `1.0` for the accepted sanity-run puzzles under the current backtracking search, but this should be treated as a heuristic success rather than a proof of uniqueness for every possible human interpretation.
+- The official dataset is dominated by semantic categories, with smaller but still useful theme and wordplay slices. That supports the current design choice of requiring at least one semantic group and one theme group, then filling the remaining slots with theme, form, or anagram mechanisms.
+- The main causes of rejection are still style leakage and ambiguity, which is expected for a generator that intentionally mixes different mechanisms.
+- The library now satisfies the practical assignment goal of having at least 10K accepted puzzles available in the checked-in output file.
+- The multi-solution count stayed at `1.0` for accepted puzzles under the current backtracking search, but this should still be treated as a heuristic success rather than a formal proof of uniqueness for every possible human interpretation.
 
 ## Remaining Caveats
 
 - The similarity score is approximate, especially when the fallback lexical backend is used instead of spaCy vectors.
 - Theme versus semantic labels are inferred automatically from official labels and are not manually annotated.
-- A 100-candidate sanity batch is useful for smoke testing, but a full 10K run should still be inspected separately before final evaluation or presentation.
+- Even with a 10K accepted library, some puzzles may still benefit from human review before final presentation or grading.

@@ -52,6 +52,7 @@ def generate_and_score_candidates(
     num_candidates: int,
     seed: int,
     validation_config: ValidationConfig,
+    target_accepted: int | None = None,
     progress_every: int = 250,
     force_refresh_dataset: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -73,9 +74,12 @@ def generate_and_score_candidates(
         "seed": seed,
         "official_puzzle_count": len(official_puzzles),
         "dataset_mechanism_counts": dataset_stats.get("mechanism_counts", {}),
+        "candidate_budget": num_candidates,
+        "target_accepted_count": target_accepted,
         "total_candidates_generated": 0,
         "accepted_count": 0,
         "acceptance_rate": 0.0,
+        "target_met": False,
         "rejected_by_structure": 0,
         "rejected_by_style": 0,
         "rejected_by_ambiguity": 0,
@@ -87,7 +91,10 @@ def generate_and_score_candidates(
         "rejected_by_generation_error": 0,
     }
 
-    for candidate_index in range(1, num_candidates + 1):
+    candidate_index = 0
+
+    while candidate_index < num_candidates:
+        candidate_index += 1
         puzzle_id = f"gen_v2_{candidate_index:06d}"
 
         try:
@@ -127,11 +134,17 @@ def generate_and_score_candidates(
         accepted_cross_scores.append(validation_result["metrics"]["average_cross_group_similarity"])
         accepted_solution_counts.append(validation_result["metrics"]["solution_count"])
 
+        if target_accepted is not None and len(accepted_puzzles) >= target_accepted:
+            report["target_met"] = True
+            if progress_every > 0:
+                print_progress(candidate_index, num_candidates, len(accepted_puzzles))
+            break
+
         if progress_every > 0 and candidate_index % progress_every == 0:
             print_progress(candidate_index, num_candidates, len(accepted_puzzles))
 
     report["accepted_count"] = len(accepted_puzzles)
-    report["acceptance_rate"] = len(accepted_puzzles) / num_candidates if num_candidates else 0.0
+    report["acceptance_rate"] = len(accepted_puzzles) / report["total_candidates_generated"] if report["total_candidates_generated"] else 0.0
     report["rejected_by_structure"] = rejection_counts["structure"]
     report["rejected_by_style"] = rejection_counts["style"]
     report["rejected_by_ambiguity"] = rejection_counts["ambiguity"]
@@ -164,10 +177,24 @@ def generate_and_score_candidates(
     return accepted_puzzles, report
 
 
+def choose_candidate_budget(num_candidates: int, target_accepted: int | None) -> int:
+    """Choose a safe candidate budget when the caller targets accepted puzzles."""
+    if target_accepted is None:
+        return num_candidates
+
+    return max(num_candidates, target_accepted * 2)
+
+
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
     parser = argparse.ArgumentParser(description="Generate and score many Infinite Connections v2 puzzles.")
     parser.add_argument("--num-candidates", type=int, default=10000, help="Number of candidate puzzles to generate.")
+    parser.add_argument(
+        "--target-accepted",
+        type=int,
+        default=None,
+        help="Keep generating until at least this many accepted puzzles are found.",
+    )
     parser.add_argument("--seed", type=int, default=561, help="Random seed for deterministic sampling.")
     parser.add_argument(
         "--within-threshold",
@@ -223,10 +250,15 @@ def main() -> None:
         cross_group_similarity_threshold=args.cross_threshold,
         max_solution_count=args.max_solutions,
     )
-    accepted_puzzles, report = generate_and_score_candidates(
+    candidate_budget = choose_candidate_budget(
         num_candidates=args.num_candidates,
+        target_accepted=args.target_accepted,
+    )
+    accepted_puzzles, report = generate_and_score_candidates(
+        num_candidates=candidate_budget,
         seed=args.seed,
         validation_config=validation_config,
+        target_accepted=args.target_accepted,
         progress_every=args.progress_every,
         force_refresh_dataset=args.force_refresh_dataset,
     )
@@ -236,6 +268,9 @@ def main() -> None:
 
     print(f"Generated {report['total_candidates_generated']} candidate puzzles.")
     print(f"Accepted {report['accepted_count']} puzzles.")
+    if args.target_accepted is not None:
+        print(f"Target accepted count: {args.target_accepted}")
+        print(f"Target met: {report['target_met']}")
     print(f"Acceptance rate: {report['acceptance_rate']:.2%}")
     print(f"Rejected by structure validation: {report['rejected_by_structure']}")
     print(f"Rejected by style validation: {report['rejected_by_style']}")
@@ -247,6 +282,12 @@ def main() -> None:
     print(f"Rejected by internal repeat: {report['rejected_by_internal_repeat']}")
     print(f"Saved accepted puzzles to {accepted_path}.")
     print(f"Saved generation report to {report_path}.")
+
+    if args.target_accepted is not None and not report["target_met"]:
+        raise SystemExit(
+            f"Stopped after {report['total_candidates_generated']} candidates without reaching "
+            f"the target of {args.target_accepted} accepted puzzles."
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 
 This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
 
-The original v1.0 pipeline is still present, but the main workflow now targets a more data-driven **v2.0** pipeline that:
+The original v1.0 pipeline is still present, but the main workflow now targets a more data-driven **v3.0** pipeline built on the earlier v2 architecture. It:
 
 - ingests the HuggingFace `tm21cy/NYT-Connections` dataset,
 - derives category banks and dataset statistics from official puzzles,
@@ -13,9 +13,9 @@ The original v1.0 pipeline is still present, but the main workflow now targets a
 - batch-generates a library of accepted puzzles,
 - and serves them in a Streamlit UI.
 
-## What v2.0 Adds
+## What v3.0 Adds
 
-The v2 pipeline extends the repo without removing the earlier MVP pieces.
+The v3 pipeline extends the repo without removing the earlier MVP pieces.
 
 - `src/data_utils/dataset_loader.py`
   Downloads or reads the HuggingFace dataset, normalizes each record into the shared internal schema, and saves:
@@ -34,13 +34,13 @@ The v2 pipeline extends the repo without removing the earlier MVP pieces.
 - `src/validators/puzzle_validators.py`
   Adds a backtracking uniqueness check and similarity-based cohesion/confusion scoring.
 - `src/batch_generate_and_score.py`
-  Batch-generates and validates candidate puzzles, defaulting to 10,000 candidates.
+  Batch-generates and validates candidate puzzles, and can now generate until a target accepted-count is reached.
 - `src/app/app.py`
   Loads puzzles from `accepted_v2.json` or generates one live on demand.
 
 ## Dataset Usage
 
-The v2 loader targets the HuggingFace dataset:
+The v3 loader targets the HuggingFace dataset:
 
 - Dataset: `tm21cy/NYT-Connections`
 - Source file: `ConnectionsFinalDataset.json`
@@ -74,7 +74,7 @@ The stats file stores:
 
 ## Generator Mechanisms
 
-v2 puzzle assembly mixes four groups with a variety constraint: every puzzle must include at least one `semantic` group and at least one `theme` group, plus additional `form` or `anagram` groups.
+v3 puzzle assembly mixes four groups with a variety constraint: every puzzle must include at least one `semantic` group and at least one `theme` group, plus additional `form` or `anagram` groups.
 
 Current mechanism modules:
 
@@ -89,7 +89,7 @@ Current mechanism modules:
 
 ## Validation
 
-The v2 validator keeps the earlier lightweight checks and adds stronger filters:
+The v3 validator keeps the earlier lightweight checks and adds stronger filters:
 
 - `validate_structure`
   Requires exactly 4 groups, 4 words per group, 16 total words, and no repeated words.
@@ -117,6 +117,7 @@ Default output files:
 The batch script now supports:
 
 - `--num-candidates`
+- `--target-accepted`
 - `--seed`
 - `--within-threshold`
 - `--cross-threshold`
@@ -127,7 +128,7 @@ The batch script now supports:
 Example:
 
 ```bash
-python src/batch_generate_and_score.py --num-candidates 10000 --seed 561
+python src/batch_generate_and_score.py --target-accepted 10000 --num-candidates 13000 --seed 561
 ```
 
 ## Streamlit UI
@@ -135,7 +136,7 @@ python src/batch_generate_and_score.py --num-candidates 10000 --seed 561
 The UI supports two puzzle sources:
 
 - `Generate New Puzzle`
-  Generates a fresh v2 puzzle and validates it before display.
+  Generates a fresh v3 puzzle and validates it before display.
 - `Load from Library`
   Loads a puzzle from `data/generated/accepted_v2.json`, either randomly or by index.
 
@@ -155,10 +156,10 @@ Build the official dataset assets:
 python src/data_utils/dataset_loader.py
 ```
 
-Generate one or many v2 puzzles:
+Generate the 10K accepted puzzle library:
 
 ```bash
-python src/batch_generate_and_score.py --num-candidates 100 --seed 561
+python src/batch_generate_and_score.py --target-accepted 10000 --num-candidates 13000 --seed 561
 ```
 
 Launch the app:
@@ -189,18 +190,21 @@ src/
   pipeline_demo.py
 ```
 
-## v2 Sanity Run Snapshot
+## v3 Library Snapshot
 
-The checked-in `generation_report_v2.json` comes from a 100-candidate sanity run with seed `561`.
+The checked-in `generation_report_v2.json` now comes from a full library-generation run with seed `561`:
 
-- generated: 100
-- accepted: 84
-- acceptance rate: 84%
-- rejected by style: 5
-- rejected by ambiguity: 10
-- rejected by low cohesion: 1
-- average within-group similarity of accepted puzzles: about `0.322`
-- average cross-group similarity of accepted puzzles: about `0.0035`
+- candidate budget: 20,000
+- generated until target reached: 12,399
+- accepted: 10,000
+- target met: `True`
+- acceptance rate: 80.65%
+- rejected by structure: 122
+- rejected by style: 861
+- rejected by ambiguity: 969
+- rejected by low cohesion: 447
+- average within-group similarity of accepted puzzles: about `0.339`
+- average cross-group similarity of accepted puzzles: about `0.003`
 
 ## Limitations
 
@@ -208,8 +212,8 @@ The checked-in `generation_report_v2.json` comes from a 100-candidate sanity run
 - `solve_puzzle_backtracking` only searches solutions expressible through the current generator banks and pattern detectors, so it may still miss some alternate human-valid partitions.
 - The similarity scorer uses a lightweight fallback when spaCy vectors are unavailable, so cohesion estimates are only approximate.
 - Theme versus semantic labels are inferred heuristically from official labels, not hand-annotated.
-- Puzzle quality is improved, but not guaranteed to meet the course’s strongest human-evaluation target without manual review.
+- Puzzle quality is improved, but not guaranteed to meet the course's strongest human-evaluation target without manual review.
 
 ## Compatibility Note
 
-The earlier v1 files and schema are still present so the original submission pipeline is not broken. The new v2 workflow is additive and uses new outputs such as `nyt_official.json`, `accepted_v2.json`, and `generation_report_v2.json`.
+The earlier v1 files and schema are still present so the original submission pipeline is not broken. The v3 workflow is additive and still uses the assignment-compatible outputs `nyt_official.json`, `accepted_v2.json`, and `generation_report_v2.json`.
