@@ -1,4 +1,6 @@
-"""Minimal Streamlit UI for browsing generated Infinite Connections puzzles."""
+"""Streamlit UI for browsing and generating Infinite Connections v2 puzzles."""
+
+from __future__ import annotations
 
 import json
 import random
@@ -14,70 +16,34 @@ if str(SRC_ROOT) not in sys.path:
 
 import streamlit as st
 
-from generators.basic_generator import generate_basic_puzzle
-from generators.puzzle_assembler import generate_candidate_puzzle
-from load_data import (
-    load_official_puzzles,
-    normalize_all_official_puzzles,
-    save_normalized_official_puzzles,
-)
-from validators.duplicate_check import is_duplicate_of_official
-from validators.puzzle_validators import (
-    validate_ambiguity_and_overlap,
-    validate_structure,
-    validate_style,
-)
+from data_utils.dataset_loader import load_or_build_dataset_assets
+from generators.puzzle_assembler import generate_candidate_puzzle_v2
+from validators.puzzle_validators import ValidationConfig, validate_puzzle
 
-RAW_OFFICIAL_PATH = PROJECT_ROOT / "data" / "raw" / "official_connections.json"
-NORMALIZED_OFFICIAL_PATH = PROJECT_ROOT / "data" / "processed" / "official_connections_normalized.json"
-ACCEPTED_PUZZLES_PATH = PROJECT_ROOT / "data" / "generated" / "accepted_puzzles.json"
+ACCEPTED_PUZZLES_PATH = PROJECT_ROOT / "data" / "generated" / "accepted_v2.json"
+ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 
-st.set_page_config(page_title="Infinite Connections", page_icon=":puzzle_piece:", layout="centered")
+st.set_page_config(page_title="Infinite Connections v2", page_icon=":puzzle_piece:", layout="centered")
 
 
 @st.cache_data(show_spinner=False)
-def load_or_build_normalized_official_puzzles() -> list[dict[str, Any]]:
-    """Load normalized official puzzles relative to the project root."""
-    if NORMALIZED_OFFICIAL_PATH.exists():
-        with NORMALIZED_OFFICIAL_PATH.open("r", encoding="utf-8") as file:
-            return json.load(file)
-
-    raw_puzzles = load_official_puzzles(raw_path=RAW_OFFICIAL_PATH)
-    normalized_puzzles = normalize_all_official_puzzles(raw_puzzles)
-    save_normalized_official_puzzles(normalized_puzzles, output_path=NORMALIZED_OFFICIAL_PATH)
-    return normalized_puzzles
+def load_official_puzzles_for_validation() -> list[dict[str, Any]]:
+    """Load the normalized official HuggingFace puzzles when available."""
+    try:
+        official_puzzles, _ = load_or_build_dataset_assets()
+        return official_puzzles
+    except Exception:
+        return []
 
 
 @st.cache_data(show_spinner=False)
 def load_saved_accepted_puzzles() -> list[dict[str, Any]]:
-    """Load accepted puzzles from the batch-generation output if present."""
+    """Load accepted v2 puzzles from disk if present."""
     if not ACCEPTED_PUZZLES_PATH.exists():
         return []
 
     with ACCEPTED_PUZZLES_PATH.open("r", encoding="utf-8") as file:
         return json.load(file)
-
-
-def choose_valid_generated_puzzle(seed: int) -> dict[str, Any]:
-    """Generate one valid puzzle for the UI when saved outputs are unavailable."""
-    official_puzzles = load_or_build_normalized_official_puzzles()
-    rng = random.Random(seed)
-
-    for attempt in range(200):
-        puzzle = generate_candidate_puzzle(puzzle_id=f"ui_{seed:06d}_{attempt:03d}", rng=rng)
-
-        if validate_structure(puzzle):
-            continue
-        if validate_style(puzzle):
-            continue
-        if validate_ambiguity_and_overlap(puzzle):
-            continue
-        if is_duplicate_of_official(puzzle, official_puzzles):
-            continue
-
-        return puzzle
-
-    return generate_basic_puzzle()
 
 
 def shuffle_words(words: list[str], seed: int) -> list[str]:
@@ -87,25 +53,43 @@ def shuffle_words(words: list[str], seed: int) -> list[str]:
     return shuffled_words
 
 
-def load_puzzle_for_display(seed: int) -> dict[str, Any]:
-    """Pick a puzzle from saved output or generate one on demand."""
-    accepted_puzzles = load_saved_accepted_puzzles()
-
-    if accepted_puzzles:
-        return random.Random(seed).choice(accepted_puzzles)
-
-    return choose_valid_generated_puzzle(seed)
-
-
-def generate_new_board() -> None:
-    """Refresh the puzzle shown in session state."""
-    seed = st.session_state.get("board_seed", 561)
-    puzzle = load_puzzle_for_display(seed)
-
+def store_puzzle_in_state(puzzle: dict[str, Any], seed: int, source_label: str) -> None:
+    """Persist the currently displayed puzzle in Streamlit session state."""
     st.session_state["puzzle"] = puzzle
     st.session_state["display_words"] = shuffle_words(list(puzzle["all_words"]), seed + 1000)
     st.session_state["show_answer"] = False
     st.session_state["board_seed"] = seed + 1
+    st.session_state["puzzle_source_label"] = source_label
+
+
+def choose_valid_generated_puzzle(seed: int) -> dict[str, Any]:
+    """Generate one valid puzzle for the UI."""
+    official_puzzles = load_official_puzzles_for_validation() or None
+    rng = random.Random(seed)
+    validation_config = ValidationConfig()
+
+    for attempt in range(250):
+        puzzle = generate_candidate_puzzle_v2(puzzle_id=f"ui_v2_{seed:06d}_{attempt:03d}", rng=rng)
+        validation = validate_puzzle(puzzle, official_puzzles=official_puzzles, config=validation_config)
+
+        if validation["is_valid"]:
+            return puzzle
+
+    raise RuntimeError("Could not generate a valid v2 puzzle for the UI after 250 attempts.")
+
+
+def load_library_puzzle(seed: int, mode: str, index: int | None) -> dict[str, Any] | None:
+    """Pick a puzzle from the saved library."""
+    accepted_puzzles = load_saved_accepted_puzzles()
+
+    if not accepted_puzzles:
+        return None
+
+    if mode == "By index" and index is not None:
+        clamped_index = max(0, min(index, len(accepted_puzzles) - 1))
+        return accepted_puzzles[clamped_index]
+
+    return random.Random(seed).choice(accepted_puzzles)
 
 
 def render_board(words: list[str]) -> None:
@@ -121,52 +105,108 @@ def render_board(words: list[str]) -> None:
             )
 
 
+def render_answer(groups: list[dict[str, Any]]) -> None:
+    """Render the solved groups with NYT-style colors."""
+    for color, group in zip(ANSWER_COLORS, groups):
+        words = " • ".join(str(word) for word in group["words"])
+        st.markdown(
+            (
+                f"<div class='answer-card' style='background:{color};'>"
+                f"<strong>{group['label']}</strong> "
+                f"<span class='answer-type'>({group['type']})</span><br>{words}"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
+
 st.markdown(
     """
     <style>
     .word-tile {
         align-items: center;
-        background: #f8fafc;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
         border: 1px solid #cbd5e1;
-        border-radius: 12px;
+        border-radius: 14px;
         display: flex;
         font-size: 1rem;
-        font-weight: 600;
+        font-weight: 700;
         justify-content: center;
-        min-height: 70px;
-        padding: 0.5rem;
+        min-height: 74px;
+        padding: 0.6rem;
         text-align: center;
+    }
+    .answer-card {
+        border-radius: 14px;
+        color: #1f2937;
+        margin-bottom: 0.7rem;
+        padding: 0.9rem 1rem;
+    }
+    .answer-type {
+        opacity: 0.75;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+if "board_seed" not in st.session_state:
+    st.session_state["board_seed"] = 561
+
 if "puzzle" not in st.session_state:
-    generate_new_board()
+    initial_puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
+    store_puzzle_in_state(initial_puzzle, st.session_state["board_seed"], "Generated live")
 
-st.title("Infinite Connections")
-st.caption("A lightweight Connections-style generator for the STA561 course project.")
+accepted_library = load_saved_accepted_puzzles()
+library_mode = st.radio("Library mode", ["Random", "By index"], horizontal=True)
+library_index: int | None = None
 
-button_columns = st.columns(2)
+if library_mode == "By index":
+    max_index = max(len(accepted_library) - 1, 0)
+    library_index = int(
+        st.number_input(
+            "Library index",
+            min_value=0,
+            max_value=max_index,
+            value=0,
+            step=1,
+            disabled=not accepted_library,
+        )
+    )
 
-if button_columns[0].button("Generate Puzzle", use_container_width=True):
-    generate_new_board()
-if button_columns[1].button("Reveal Answer", use_container_width=True):
+st.title("Infinite Connections v2")
+st.caption("A data-driven NYT-style generator for the STA561 course project.")
+
+control_columns = st.columns(3)
+
+if control_columns[0].button("Generate New Puzzle", use_container_width=True):
+    puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
+    store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
+
+if control_columns[1].button("Load from Library", use_container_width=True):
+    puzzle = load_library_puzzle(st.session_state["board_seed"], library_mode, library_index)
+
+    if puzzle is None:
+        st.warning("No saved `accepted_v2.json` library was found yet.")
+    else:
+        source_label = f"Library puzzle ({library_mode.lower()})"
+        store_puzzle_in_state(puzzle, st.session_state["board_seed"], source_label)
+
+if control_columns[2].button("Reveal Answers", use_container_width=True):
     st.session_state["show_answer"] = True
 
 current_puzzle = st.session_state["puzzle"]
 display_words = st.session_state["display_words"]
 
-st.write(f"Puzzle ID: `{current_puzzle['puzzle_id']}`")
-st.write(f"Source: `{current_puzzle['source']}`")
+metadata_columns = st.columns(3)
+metadata_columns[0].metric("Puzzle ID", current_puzzle["puzzle_id"])
+metadata_columns[1].metric("Source", st.session_state.get("puzzle_source_label", current_puzzle["source"]))
+metadata_columns[2].metric("Saved library", len(accepted_library))
+
 render_board(display_words)
 
 if st.session_state["show_answer"]:
     st.subheader("Answer")
-
-    for group in current_puzzle["groups"]:
-        words = ", ".join(group["words"])
-        st.write(f"**{group['label']}** (`{group['type']}`): {words}")
+    render_answer(current_puzzle["groups"])
 else:
-    st.caption("Use Reveal Answer to show the four hidden categories.")
+    st.caption("Use Reveal Answers to show the four hidden categories in yellow, green, blue, and purple.")
