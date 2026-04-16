@@ -127,30 +127,48 @@ Example:
 
 ```json
 {
+  "puzzle_id": "gen_000001",
+  "source": "generated",
   "groups": [
     {
       "label": "Birds",
-      "words": ["eagle", "sparrow", "owl", "crow"],
-      "type": "semantic"
+      "type": "semantic",
+      "words": ["eagle", "crow", "owl", "sparrow"]
     },
     {
       "label": "Colors",
-      "words": ["red", "blue", "green", "yellow"],
-      "type": "semantic"
-    },
-    {
-      "label": "Starts with 'sh'",
-      "words": ["ship", "shoe", "shell", "shock"],
-      "type": "sound_or_form"
+      "type": "semantic",
+      "words": ["red", "blue", "green", "yellow"]
     },
     {
       "label": "Associated with New York",
-      "words": ["subway", "broadway", "yankees", "manhattan"],
-      "type": "theme"
+      "type": "theme",
+      "words": ["subway", "broadway", "yankees", "manhattan"]
+    },
+    {
+      "label": "Starts with sh",
+      "type": "form",
+      "words": ["ship", "shoe", "shock", "shell"]
     }
+  ],
+  "all_words": [
+    "eagle", "crow", "owl", "sparrow",
+    "red", "blue", "green", "yellow",
+    "subway", "broadway", "yankees", "manhattan",
+    "ship", "shoe", "shock", "shell"
   ]
 }
 ```
+
+Each group stores:
+- `label`: the hidden category name
+- `type`: the group type such as `semantic`, `theme`, or `form`
+- `words`: the four words in their stored order
+
+Each puzzle also stores:
+- `puzzle_id`
+- `source`
+- `all_words`
 
 ## Evaluation Goals
 

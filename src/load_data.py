@@ -12,5 +12,5 @@ def load_official_puzzles(
 
 
 def normalize_official_puzzle(raw_puzzle: dict[str, Any]) -> dict[str, Any]:
-    """Convert one raw puzzle record into the internal project schema."""
+    """Convert one raw puzzle record into the unified internal puzzle schema."""
     raise NotImplementedError("Implement puzzle normalization here.")
