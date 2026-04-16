@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Any
 
 
-def load_official_puzzles(raw_path: str | Path = "connections.json") -> list[dict[str, Any]]:
+def load_official_puzzles(
+    raw_path: str | Path = "data/raw/official_connections.json",
+) -> list[dict[str, Any]]:
     """Load the raw official puzzle export from disk."""
     raise NotImplementedError("Implement official puzzle loading here.")
 
