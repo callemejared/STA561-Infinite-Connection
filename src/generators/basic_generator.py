@@ -1,33 +1,23 @@
-"""Basic starter generator for draft Infinite Connections puzzles."""
+"""Basic entry point for generating a simple Infinite Connections puzzle."""
 
-EXAMPLE_CATEGORY_BANK = [
-    {"label": "Birds", "type": "semantic", "words": ["eagle", "crow", "owl", "sparrow"]},
-    {"label": "Colors", "type": "semantic", "words": ["red", "blue", "green", "yellow"]},
-    {
-        "label": "Associated with New York",
-        "type": "theme",
-        "words": ["subway", "broadway", "yankees", "manhattan"],
-    },
-    {"label": "Starts with sh", "type": "form", "words": ["ship", "shoe", "shock", "shell"]},
+from generators.category_bank import find_group_by_label
+from generators.puzzle_assembler import build_puzzle, generate_candidate_puzzle
+
+DEMO_GROUP_SPECS = [
+    ("semantic", "Kitchen tools"),
+    ("semantic", "Tree types"),
+    ("theme", "At the beach"),
+    ("form", "Starts with SH"),
 ]
 
 
-def generate_basic_puzzle() -> dict[str, object]:
-    """Return a simple example puzzle built from the starter category bank."""
+def generate_basic_puzzle(seed: int | None = None) -> dict[str, object]:
+    """Return a deterministic sample puzzle or a seeded candidate puzzle."""
+    if seed is not None:
+        return generate_candidate_puzzle(puzzle_id="gen_000001", seed=seed)
+
     groups = [
-        {
-            "label": group["label"],
-            "type": group["type"],
-            "words": list(group["words"]),
-        }
-        for group in EXAMPLE_CATEGORY_BANK
+        find_group_by_label(group_type=group_type, label=label)
+        for group_type, label in DEMO_GROUP_SPECS
     ]
-
-    all_words = [word for group in groups for word in group["words"]]
-
-    return {
-        "puzzle_id": "gen_000001",
-        "source": "generated",
-        "groups": groups,
-        "all_words": all_words,
-    }
+    return build_puzzle(groups, puzzle_id="gen_000001")

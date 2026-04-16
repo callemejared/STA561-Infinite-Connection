@@ -2,228 +2,214 @@
 
 ## Project Overview
 
-This project builds an AI-assisted generator for NYT-style **Connections** puzzles.
+This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
 
-A Connections puzzle contains 16 words that should be partitioned into 4 groups of 4. Each group shares a hidden relationship, such as semantic meaning, sound pattern, theme, or wordplay. The goal of this project is not to solve existing puzzles, but to generate new puzzles that are coherent, interesting, and ideally feel similar to real NYT Connections puzzles.
+The original v1.0 pipeline is still present, but the main workflow now targets a more data-driven **v2.0** pipeline that:
 
-For this course project, we aim to:
-1. build a puzzle generator,
-2. avoid copying past official puzzles,
-3. reduce the chance of multiple plausible solutions,
-4. create a simple web interface for viewing generated puzzles.
+- ingests the HuggingFace `tm21cy/NYT-Connections` dataset,
+- derives category banks and dataset statistics from official puzzles,
+- mixes multiple generation mechanisms,
+- validates puzzles for structure, duplication, ambiguity, multi-solution risk, and cohesion/confusion,
+- batch-generates a library of accepted puzzles,
+- and serves them in a Streamlit UI.
 
-## Project Goal
+## What v2.0 Adds
 
-We want to generate large numbers of original Connections-style puzzles automatically.
+The v2 pipeline extends the repo without removing the earlier MVP pieces.
 
-Our system will:
-- generate candidate groups using different grouping mechanisms,
-- combine four groups into a 16-word puzzle,
-- filter out low-quality puzzles,
-- check whether a puzzle is too ambiguous or has multiple plausible solutions,
-- present puzzles in a clean interface.
+- `src/data_utils/dataset_loader.py`
+  Downloads or reads the HuggingFace dataset, normalizes each record into the shared internal schema, and saves:
+  - `data/processed/nyt_official.json`
+  - `data/processed/nyt_dataset_stats.json`
+- `src/generators/semantic_generator.py`
+  Uses dataset-derived semantic banks and an optional WordNet fallback.
+- `src/generators/theme_generator.py`
+  Uses dataset-derived theme groups plus a small curated theme bank.
+- `src/generators/form_generator.py`
+  Uses dataset-derived form categories plus generated prefix/suffix groups and a few curated rhyme/homophone sets.
+- `src/generators/anagram_generator.py`
+  Adds optional anagram-specific groups for variety.
+- `src/generators/puzzle_assembler.py`
+  Adds `generate_candidate_puzzle_v2(...)` and enforces mechanism variety.
+- `src/validators/puzzle_validators.py`
+  Adds a backtracking uniqueness check and similarity-based cohesion/confusion scoring.
+- `src/batch_generate_and_score.py`
+  Batch-generates and validates candidate puzzles, defaulting to 10,000 candidates.
+- `src/app/app.py`
+  Loads puzzles from `accepted_v2.json` or generates one live on demand.
 
-## Motivation
+## Dataset Usage
 
-Generating Connections puzzles is harder than solving them. A good puzzle needs:
-- four internally coherent groups,
-- enough challenge to be interesting,
-- enough separation to avoid accidental multiple solutions,
-- some variety in style and difficulty.
+The v2 loader targets the HuggingFace dataset:
 
-Because of this, we are designing the generator as a pipeline instead of asking an LLM to generate a full puzzle in one shot.
+- Dataset: `tm21cy/NYT-Connections`
+- Source file: `ConnectionsFinalDataset.json`
+- Normalized output: `data/processed/nyt_official.json`
+- Statistics output: `data/processed/nyt_dataset_stats.json`
 
-## Core Idea
+Each normalized puzzle uses the shared schema:
 
-We will build separate generators for different group types, then combine them.
+```json
+{
+  "puzzle_id": "nyt_0358",
+  "source": "nyt_official",
+  "groups": [
+    {
+      "label": "REMOVE, AS BODY HAIR",
+      "type": "semantic",
+      "words": ["LASER", "PLUCK", "THREAD", "WAX"]
+    }
+  ],
+  "all_words": ["LASER", "PLUCK", "THREAD", "WAX", "..."]
+}
+```
 
-Planned group types:
-- **Semantic groups**  
-  Example: words with similar meaning or shared category
-- **Theme groups**  
-  Example: words associated with a city, movie, brand, sport, etc.
-- **Sound / form groups**  
-  Example: same prefix, rhyme, homophone pattern, spelling pattern
-- **Wordplay groups**  
-  Example: hidden shared structure, phrase-based trick, misleading overlap
+The stats file stores:
 
-After generating groups, we will:
-- assemble candidate puzzles,
-- compare them against past official puzzles,
-- run validation checks,
-- keep only the better candidates.
+- word frequency counts,
+- category label frequency counts,
+- inferred mechanism counts,
+- a reusable word pool,
+- and category banks split into `semantic`, `theme`, and `form`.
 
-## Planned System Pipeline
+## Generator Mechanisms
 
-**Step 1:**  
-Collect and organize past Connections data for reference and duplication checking.
+v2 puzzle assembly mixes four groups with a variety constraint: every puzzle must include at least one `semantic` group and at least one `theme` group, plus additional `form` or `anagram` groups.
 
-**Step 2:**  
-Build several independent group generators.
+Current mechanism modules:
 
-**Step 3:**  
-Generate candidate 4-word groups.
+- `semantic`
+  Uses official dataset categories and can optionally try WordNet if available.
+- `theme`
+  Uses official theme-like labels plus a curated bank such as cities, monsters, foods, and event contexts.
+- `form`
+  Uses official wordplay-style groups and dynamic shared-prefix/shared-suffix groups.
+- `anagram`
+  Uses explicit anagram sets to increase mechanism diversity.
 
-**Step 4:**  
-Combine 4 groups into a 16-word puzzle.
+## Validation
 
-**Step 5:**  
-Run filtering and validation:
-- exact duplicate check,
-- overlap check,
-- ambiguity check,
-- heuristic or solver-based quality check.
+The v2 validator keeps the earlier lightweight checks and adds stronger filters:
 
-**Step 6:**  
-Show accepted puzzles in a simple web interface.
+- `validate_structure`
+  Requires exactly 4 groups, 4 words per group, 16 total words, and no repeated words.
+- `validate_style`
+  Rejects labels that are generic, repeated, or too revealing.
+- `validate_ambiguity_and_overlap`
+  Rejects obvious cross-group surface conflicts.
+- `exact_duplicate_check`
+  Rejects exact duplicates of official puzzles.
+- `solve_puzzle_backtracking`
+  Searches valid 4-word partitions using the generator banks and counts how many full puzzle solutions exist.
+- `embedding_score`
+  Computes average within-group and cross-group similarity.
+  If a spaCy model is installed, it will use that; otherwise it falls back to a lightweight lexical plus dataset-context representation.
+- `validate_puzzle`
+  Combines all checks and returns detailed rejection reasons and metrics.
+
+## Batch Generation
+
+Default output files:
+
+- `data/generated/accepted_v2.json`
+- `data/generated/generation_report_v2.json`
+
+The batch script now supports:
+
+- `--num-candidates`
+- `--seed`
+- `--within-threshold`
+- `--cross-threshold`
+- `--max-solutions`
+- `--progress-every`
+- `--force-refresh-dataset`
+
+Example:
+
+```bash
+python src/batch_generate_and_score.py --num-candidates 10000 --seed 561
+```
+
+## Streamlit UI
+
+The UI supports two puzzle sources:
+
+- `Generate New Puzzle`
+  Generates a fresh v2 puzzle and validates it before display.
+- `Load from Library`
+  Loads a puzzle from `data/generated/accepted_v2.json`, either randomly or by index.
+
+The board is shown as a 4x4 grid, and revealed answers are color-coded in NYT-style yellow, green, blue, and purple.
+
+## How to Run
+
+Install the current project dependency set:
+
+```bash
+pip install -r requirements.txt
+```
+
+Build the official dataset assets:
+
+```bash
+python src/data_utils/dataset_loader.py
+```
+
+Generate one or many v2 puzzles:
+
+```bash
+python src/batch_generate_and_score.py --num-candidates 100 --seed 561
+```
+
+Launch the app:
+
+```bash
+streamlit run src/app/app.py
+```
 
 ## Repository Structure
 
 ```text
 data/
-  Stores historical Connections data, reference word lists, and generated puzzle outputs.
-
-src/
-  Main source code.
-
-src/generators/
-  Code for different puzzle group generators.
-
-src/validators/
-  Code for duplicate checking, ambiguity filtering, and puzzle validation.
-
-src/app/
-  Simple web interface for generating and viewing puzzles.
+  raw/
+  processed/
+  generated/
 
 docs/
-  Project notes, design decisions, and write-up materials.
+  puzzle_format.md
+  v2_dataset_and_generation_report.md
 
-notebooks/
-  Optional exploratory notebooks for testing ideas and prompts.
+src/
+  app/
+  data_utils/
+  generators/
+  validators/
+  batch_generate_and_score.py
+  load_data.py
+  pipeline_demo.py
 ```
 
-## Current Development Plan
+## v2 Sanity Run Snapshot
 
-**Phase 1:**  
-Set up repository, organize historical data, and define puzzle format.
+The checked-in `generation_report_v2.json` comes from a 100-candidate sanity run with seed `561`.
 
-**Phase 2:**  
-Implement a basic semantic/theme generator.
+- generated: 100
+- accepted: 84
+- acceptance rate: 84%
+- rejected by style: 5
+- rejected by ambiguity: 10
+- rejected by low cohesion: 1
+- average within-group similarity of accepted puzzles: about `0.322`
+- average cross-group similarity of accepted puzzles: about `0.0035`
 
-**Phase 3:**  
-Implement validation rules and duplicate checks.
+## Limitations
 
-**Phase 4:**  
-Build a simple UI.
+- The generator is still heuristic and bank-based, even though it is now data-driven.
+- `solve_puzzle_backtracking` only searches solutions expressible through the current generator banks and pattern detectors, so it may still miss some alternate human-valid partitions.
+- The similarity scorer uses a lightweight fallback when spaCy vectors are unavailable, so cohesion estimates are only approximate.
+- Theme versus semantic labels are inferred heuristically from official labels, not hand-annotated.
+- Puzzle quality is improved, but not guaranteed to meet the course’s strongest human-evaluation target without manual review.
 
-**Phase 5:**  
-Generate many candidate puzzles and evaluate quality.
+## Compatibility Note
 
-## Puzzle Format
-
-Each puzzle will be stored in a structured format such as JSON.
-
-Example:
-
-```json
-{
-  "puzzle_id": "gen_000001",
-  "source": "generated",
-  "groups": [
-    {
-      "label": "Birds",
-      "type": "semantic",
-      "words": ["eagle", "crow", "owl", "sparrow"]
-    },
-    {
-      "label": "Colors",
-      "type": "semantic",
-      "words": ["red", "blue", "green", "yellow"]
-    },
-    {
-      "label": "Associated with New York",
-      "type": "theme",
-      "words": ["subway", "broadway", "yankees", "manhattan"]
-    },
-    {
-      "label": "Starts with sh",
-      "type": "form",
-      "words": ["ship", "shoe", "shock", "shell"]
-    }
-  ],
-  "all_words": [
-    "eagle", "crow", "owl", "sparrow",
-    "red", "blue", "green", "yellow",
-    "subway", "broadway", "yankees", "manhattan",
-    "ship", "shoe", "shock", "shell"
-  ]
-}
-```
-
-Each group stores:
-- `label`: the hidden category name
-- `type`: the group type such as `semantic`, `theme`, or `form`
-- `words`: the four words in their stored order
-
-Each puzzle also stores:
-- `puzzle_id`
-- `source`
-- `all_words`
-
-## Evaluation Goals
-
-A good generated puzzle should:
-- contain 4 meaningful groups,
-- not exactly match a past official puzzle,
-- avoid obvious multi-solution structure,
-- feel natural and interesting to a human player,
-- resemble the style of real Connections puzzles.
-
-## Initial Tech Stack
-
-- Python
-- pandas
-- json
-- nltk or other word-related libraries
-- optional LLM API for candidate generation or editing
-- Streamlit or Gradio for the web interface
-
-## How to Run
-
-This section will be updated as implementation progresses.
-
-Tentative workflow:
-1. install dependencies
-2. load historical puzzle data
-3. run a generator script
-4. validate generated puzzles
-5. launch the local web interface
-
-Example future commands:
-- `python src/generate_puzzles.py`
-- `python src/validate_puzzles.py`
-- `streamlit run src/app/app.py`
-
-## What Is Implemented So Far
-
-Currently in progress:
-- project planning
-- repository setup
-- README drafting
-- system design for generator + validator pipeline
-
-## Next Steps
-
-Immediate next tasks:
-1. define a standard JSON format for puzzles,
-2. add past official puzzle data,
-3. implement a first simple generator,
-4. implement duplicate detection,
-5. generate and inspect sample outputs,
-6. build the first version of the interface.
-
-## Notes
-
-This repository is for a course final project.  
-The project focuses on puzzle generation, not only puzzle solving.  
-The system will likely combine rule-based methods, curated data, and AI-assisted generation.
+The earlier v1 files and schema are still present so the original submission pipeline is not broken. The new v2 workflow is additive and uses new outputs such as `nyt_official.json`, `accepted_v2.json`, and `generation_report_v2.json`.

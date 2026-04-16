@@ -11,6 +11,7 @@ from load_data import (
     save_normalized_official_puzzles,
 )
 from validators.duplicate_check import is_duplicate_of_official
+from validators.puzzle_validators import collect_validation_report
 
 GENERATED_SAMPLE_PATH = Path("data/generated/sample_puzzle.json")
 
@@ -38,15 +39,26 @@ def save_sample_puzzle(puzzle: dict[str, object], output_path: Path = GENERATED_
 
 
 def main() -> None:
-    """Run the first minimal pipeline demo."""
+    """Run the v1.0 pipeline demo on one deterministic sample puzzle."""
     official_puzzles = load_or_build_normalized_official_puzzles()
     print(f"Loaded {len(official_puzzles)} official puzzles.")
 
     candidate_puzzle = generate_basic_puzzle()
     print(f"Generated puzzle: {candidate_puzzle['puzzle_id']}")
 
+    validation_report = collect_validation_report(candidate_puzzle)
+
+    for validator_name, reasons in validation_report.items():
+        print(f"{validator_name} validation passed: {not reasons}")
+        for reason in reasons:
+            print(f"  - {reason}")
+
     is_duplicate = is_duplicate_of_official(candidate_puzzle, official_puzzles)
     print(f"Exact duplicate of official puzzle: {is_duplicate}")
+
+    if any(validation_report.values()):
+        print("No sample file was written because the generated puzzle did not pass validation.")
+        return
 
     if is_duplicate:
         print("No sample file was written because the generated puzzle matched an official puzzle.")
