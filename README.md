@@ -2,128 +2,89 @@
 
 ## Project Overview
 
-This project builds an AI-assisted generator for NYT-style **Connections** puzzles.
+This project builds a lightweight generator for NYT-style **Connections** puzzles for the STA561 final project.
 
-A Connections puzzle contains 16 words that should be partitioned into 4 groups of 4. Each group shares a hidden relationship, such as semantic meaning, sound pattern, theme, or wordplay. The goal of this project is not to solve existing puzzles, but to generate new puzzles that are coherent, interesting, and ideally feel similar to real NYT Connections puzzles.
+A Connections puzzle contains 16 words that should be partitioned into 4 groups of 4. Each group shares a hidden relationship, such as semantic meaning, a shared theme, or a shallow word-form pattern. The goal here is to generate new puzzles, not just solve existing ones.
 
-For this course project, we aim to:
-1. build a puzzle generator,
-2. avoid copying past official puzzles,
-3. reduce the chance of multiple plausible solutions,
-4. create a simple web interface for viewing generated puzzles.
+For this course project, we want to:
+1. generate new Connections-style puzzles,
+2. avoid copying official puzzles,
+3. reduce obvious multi-solution puzzles with practical heuristics,
+4. show the results in a clean demo interface.
 
-## Project Goal
+## What Is Implemented
 
-We want to generate large numbers of original Connections-style puzzles automatically.
+The repo now includes a submission-ready v1.0 MVP with:
 
-Our system will:
-- generate candidate groups using different grouping mechanisms,
-- combine four groups into a 16-word puzzle,
-- filter out low-quality puzzles,
-- check whether a puzzle is too ambiguous or has multiple plausible solutions,
-- present puzzles in a clean interface.
+- a unified internal puzzle schema shared across loaders, generators, validators, and UI
+- `src/load_data.py` for loading raw official puzzle data and saving normalized official puzzles
+- separate generator modules for `semantic`, `theme`, and `form` mechanisms
+- a puzzle assembly layer that combines four groups into one 16-word candidate puzzle
+- exact duplicate checking against official normalized puzzles
+- lightweight structure, style, and ambiguity/overlap validators
+- a batch generation pipeline that saves accepted puzzles plus a generation report
+- a minimal Streamlit app for viewing generated puzzles on a shuffled 4x4 board
 
-## Motivation
+## Generator Mechanisms
 
-Generating Connections puzzles is harder than solving them. A good puzzle needs:
-- four internally coherent groups,
-- enough challenge to be interesting,
-- enough separation to avoid accidental multiple solutions,
-- some variety in style and difficulty.
+Current supported generation mechanisms:
 
-Because of this, we are designing the generator as a pipeline instead of asking an LLM to generate a full puzzle in one shot.
+- **Semantic**
+  Example style: `Kitchen tools`, `Tree types`, `Chess pieces`
+- **Theme**
+  Example style: `At the beach`, `At the airport`, `In a detective story`
+- **Form**
+  Example style: `Starts with SH`, `Contains OO`, `Ends with IGHT`
 
-## Core Idea
+The current generator is intentionally simple and bank-based. Each mechanism has its own small curated category bank, and the puzzle assembler mixes them into full candidate puzzles.
 
-We will build separate generators for different group types, then combine them.
+## Validation
 
-Planned group types:
-- **Semantic groups**  
-  Example: words with similar meaning or shared category
-- **Theme groups**  
-  Example: words associated with a city, movie, brand, sport, etc.
-- **Sound / form groups**  
-  Example: same prefix, rhyme, homophone pattern, spelling pattern
-- **Wordplay groups**  
-  Example: hidden shared structure, phrase-based trick, misleading overlap
+Current validators include:
 
-After generating groups, we will:
-- assemble candidate puzzles,
-- compare them against past official puzzles,
-- run validation checks,
-- keep only the better candidates.
-
-## Planned System Pipeline
-
-**Step 1:**  
-Collect and organize past Connections data for reference and duplication checking.
-
-**Step 2:**  
-Build several independent group generators.
-
-**Step 3:**  
-Generate candidate 4-word groups.
-
-**Step 4:**  
-Combine 4 groups into a 16-word puzzle.
-
-**Step 5:**  
-Run filtering and validation:
-- exact duplicate check,
-- overlap check,
-- ambiguity check,
-- heuristic or solver-based quality check.
-
-**Step 6:**  
-Show accepted puzzles in a simple web interface.
+- **Structure validation**
+  - exactly 4 groups
+  - exactly 4 words per group
+  - exactly 16 words total
+  - each word used exactly once
+  - `all_words` must match the flattened group words
+- **Style validation**
+  - rejects overly generic labels such as `VERBS` or `5-LETTER WORDS`
+  - rejects labels that directly appear inside one of their own words when that makes the category too obvious
+  - rejects repeated or near-identical category labels within the same puzzle
+- **Ambiguity / overlap validation**
+  - uses simple prefix/suffix surface-pattern heuristics
+  - rejects puzzles that appear to create strong alternate groupings across multiple groups
+  - intentionally stays lightweight rather than using a heavy solver
+- **Exact duplicate validation**
+  - preserves exact duplicate checking against official puzzles
 
 ## Repository Structure
 
 ```text
 data/
-  Stores historical Connections data, reference word lists, and generated puzzle outputs.
+  raw/
+  processed/
+  generated/
 
 src/
-  Main source code.
-
-src/generators/
-  Code for different puzzle group generators.
-
-src/validators/
-  Code for duplicate checking, ambiguity filtering, and puzzle validation.
-
-src/app/
-  Simple web interface for generating and viewing puzzles.
+  app/
+  generators/
+  validators/
+  batch_generate_and_score.py
+  load_data.py
+  pipeline_demo.py
 
 docs/
-  Project notes, design decisions, and write-up materials.
+  Notes on schema and project design.
 
 notebooks/
-  Optional exploratory notebooks for testing ideas and prompts.
+  Optional exploratory work.
 ```
-
-## Current Development Plan
-
-**Phase 1:**  
-Set up repository, organize historical data, and define puzzle format.
-
-**Phase 2:**  
-Implement a basic semantic/theme generator.
-
-**Phase 3:**  
-Implement validation rules and duplicate checks.
-
-**Phase 4:**  
-Build a simple UI.
-
-**Phase 5:**  
-Generate many candidate puzzles and evaluate quality.
 
 ## Puzzle Format
 
-Each puzzle will be stored in a structured format such as JSON.
-
-Example:
+All components use the same internal schema:
 
 ```json
 {
@@ -131,99 +92,117 @@ Example:
   "source": "generated",
   "groups": [
     {
-      "label": "Birds",
+      "label": "Kitchen tools",
       "type": "semantic",
-      "words": ["eagle", "crow", "owl", "sparrow"]
+      "words": ["LADLE", "PEELER", "SPATULA", "WHISK"]
     },
     {
-      "label": "Colors",
+      "label": "Tree types",
       "type": "semantic",
-      "words": ["red", "blue", "green", "yellow"]
+      "words": ["CEDAR", "MAPLE", "OAK", "PINE"]
     },
     {
-      "label": "Associated with New York",
+      "label": "At the beach",
       "type": "theme",
-      "words": ["subway", "broadway", "yankees", "manhattan"]
+      "words": ["BUCKET", "SANDCASTLE", "SEASHELL", "TOWEL"]
     },
     {
-      "label": "Starts with sh",
+      "label": "Starts with SH",
       "type": "form",
-      "words": ["ship", "shoe", "shock", "shell"]
+      "words": ["SHELL", "SHINE", "SHIRT", "SHOCK"]
     }
   ],
   "all_words": [
-    "eagle", "crow", "owl", "sparrow",
-    "red", "blue", "green", "yellow",
-    "subway", "broadway", "yankees", "manhattan",
-    "ship", "shoe", "shock", "shell"
+    "LADLE", "PEELER", "SPATULA", "WHISK",
+    "CEDAR", "MAPLE", "OAK", "PINE",
+    "BUCKET", "SANDCASTLE", "SEASHELL", "TOWEL",
+    "SHELL", "SHINE", "SHIRT", "SHOCK"
   ]
 }
 ```
 
-Each group stores:
-- `label`: the hidden category name
-- `type`: the group type such as `semantic`, `theme`, or `form`
-- `words`: the four words in their stored order
+The schema is unchanged from the project specification:
 
-Each puzzle also stores:
 - `puzzle_id`
 - `source`
+- `groups`
 - `all_words`
 
-## Evaluation Goals
+Each group stores:
 
-A good generated puzzle should:
-- contain 4 meaningful groups,
-- not exactly match a past official puzzle,
-- avoid obvious multi-solution structure,
-- feel natural and interesting to a human player,
-- resemble the style of real Connections puzzles.
-
-## Initial Tech Stack
-
-- Python
-- pandas
-- json
-- nltk or other word-related libraries
-- optional LLM API for candidate generation or editing
-- Streamlit or Gradio for the web interface
+- `label`
+- `type`
+- `words`
 
 ## How to Run
 
-This section will be updated as implementation progresses.
+Install dependencies:
 
-Tentative workflow:
-1. install dependencies
-2. load historical puzzle data
-3. run a generator script
-4. validate generated puzzles
-5. launch the local web interface
+```bash
+pip install -r requirements.txt
+```
 
-Example future commands:
-- `python src/generate_puzzles.py`
-- `python src/validate_puzzles.py`
-- `streamlit run src/app/app.py`
+Normalize official data:
 
-## What Is Implemented So Far
+```bash
+python src/load_data.py
+```
 
-Currently in progress:
-- project planning
-- repository setup
-- README drafting
-- system design for generator + validator pipeline
+Run the simple pipeline demo:
 
-## Next Steps
+```bash
+python src/pipeline_demo.py
+```
 
-Immediate next tasks:
-1. define a standard JSON format for puzzles,
-2. add past official puzzle data,
-3. implement a first simple generator,
-4. implement duplicate detection,
-5. generate and inspect sample outputs,
-6. build the first version of the interface.
+Run batch generation and scoring:
+
+```bash
+python src/batch_generate_and_score.py --num-candidates 200 --seed 561
+```
+
+Launch the Streamlit UI:
+
+```bash
+streamlit run src/app/app.py
+```
+
+## Batch Output Files
+
+The batch script writes:
+
+- `data/generated/accepted_puzzles.json`
+- `data/generated/generation_report.json`
+
+The report includes:
+
+- total candidates generated
+- rejected by duplicate check
+- rejected by structure validation
+- rejected by style validation
+- rejected by ambiguity validation
+- accepted count
+- rough counts by generator type
+
+## What Makes This a Good v1.0
+
+This version is a good course-project MVP because it:
+
+- clearly focuses on **generation**, not just solving
+- uses **multiple explicit grouping mechanisms**
+- preserves a **clean shared schema**
+- includes **practical validation** instead of no filtering
+- supports **batch generation** for producing many candidates
+- includes a **simple web demo** for evaluation and presentation
+
+It is small enough to understand quickly, but complete enough to demonstrate a coherent end-to-end puzzle generation pipeline.
+
+## Known Limitations
+
+- The generator is curated and bank-based, so category variety is still limited.
+- The ambiguity filter is heuristic-based and does not guarantee unique solutions.
+- The current system does not rank puzzles by human difficulty beyond the lightweight filters.
+- Some accepted puzzles may still need manual review before being shown in a polished final demo.
 
 ## Notes
 
-This repository is for a course final project.  
-The project focuses on puzzle generation, not only puzzle solving.  
-The system will likely combine rule-based methods, curated data, and AI-assisted generation.
+This repository is for a course final project focused on puzzle generation. The current implementation aims for clarity, reliability, and assignment alignment over heavy modeling or research complexity.

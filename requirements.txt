@@ -2,3 +2,4 @@
 # Example:
 # pandas
 # jupyter
+streamlit
