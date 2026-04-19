@@ -16,9 +16,9 @@ SINGLETON_LINK_THRESHOLD = 0.18
 AMBIGUITY_MARGIN = 0.10
 PUZZLE_DIFFICULTY_RANGE = (0.35, 0.68)
 # Lower the live-generation rejection rate so Streamlit clicks do not block for too long.
-MIN_INTERFERENCE_SCORE = 1.55
-# Allow fewer decoy-rich groups in live mode to reduce candidate churn while keeping some misleadingness.
-MIN_DECOY_GROUP_COUNT = 2
+MIN_INTERFERENCE_SCORE = 1.40
+# Allow just one strongly decoy-rich group in live mode to reduce candidate churn while keeping some misleadingness.
+MIN_DECOY_GROUP_COUNT = 1
 
 
 def _group_signature(group: dict[str, Any]) -> tuple[str, str | None, str | None, str | None]:
