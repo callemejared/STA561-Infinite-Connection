@@ -1,408 +1,296 @@
-# Infinite Connections
+# Infinite Connections Project Description
 
 ## Project Overview
 
-This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
+The Infinite Connections project is a generator for puzzles similar to the New York Times *Connections* puzzle. The goal of the project is to automatically construct puzzles containing four groups of four words each, where each group has a clear thematic, semantic, or formal relationship, while also ensuring that the puzzle has a certain level of difficulty and misleadingness. The design of the project has gone through multiple iterative versions (v1-v6), developing from an initial proof of concept into the final submission version, and provides a complete toolchain for data loading, puzzle generation, batch production, validation, and visualization. In the current `codex/v6-final` branch, the code is based on the low-cost batch generator from v5 and uses independently authored semantic/theme/form/anagram banks, while ensuring that these banks do not overlap with the official New York Times puzzle bank.
 
-The repository now contains **three complementary workflows**:
+This repository contains three complementary workflows: the v4 high-quality pipeline, the v5 large-scale low-cost pipeline, and the v6 final submission pipeline, where the v6 branch introduces original banks and strict independence checks while ensuring generation speed.
 
-- **v4**: a higher-cost, validator-heavy pipeline for carefully filtered single puzzles
-- **v5**: a lower-cost, batch-oriented pipeline designed to generate large libraries quickly and support both reviewer and player-facing Streamlit interfaces
-- **v6 final**: the submission-ready branch, built on v5's cheap batch generator but with independently authored semantic/theme/form/anagram banks that hard-fail or filter out any overlap with official NYT groups
+## Version Iteration History
 
-The v4 pipeline keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
+The project has gone through six major versions, each improving on the previous one. The following summary will help readers understand the technical evolution of each version:
 
-- stronger difficulty calibration,
-- deliberate but controlled misleadingness,
-- phoneme-level rhyme handling,
-- earlier rejection of trivial form groups,
-- and unified v4 naming for generation functions and outputs.
+### v1 - Prototype Verification
 
-The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator. The current **v6 final** branch keeps that low-cost workflow, then adds the final submission requirement that all reusable banked groups must be independent from official NYT groups.
+Goal: Verify whether it is feasible to construct a puzzle with 4 groups and 16 words in total according to the Connections rules.  
+Functions: Implement the most basic loader, parse the official dataset, and establish the group structure; prove the feasibility of word grouping and the basic puzzle structure.  
+Shortcomings: Only a functional verification, lacking systematic bank management, difficulty evaluation, and validation mechanisms.
 
-## Version Progression (v1-v6 Final)
+### v2 - Dataset Loading and Standardization
 
-- **v1**: initial prototype for loading Connections-style groups and proving the 4-group / 16-word schema.
-- **v2**: dataset-loading and normalization stage, with reusable category-bank extraction from the official dataset.
-- **v3**: stronger generator/assembler baseline built on those banks, plus early puzzle validation and Streamlit integration.
-- **v4**: higher-cost quality pipeline with tier balancing, deeper ambiguity checks, rhyme handling, singleton-word checks, and validator-heavy acceptance.
-- **v5**: low-cost compatibility-graph batch generator designed for 10K-scale production, plus separate reviewer and player-facing Streamlit interfaces.
-- **v6 final**: submission-ready version built on v5, with independently authored semantic/theme/form/anagram banks, hard overlap protection against official NYT groups, and practical low-cost constraints so 10K puzzle generation stays fast.
+Goal: Convert the official dataset into a unified internal format and provide a unified bank for subsequent generators.  
+Functions:
 
-## v5 Progress Update
+- Using the `tm21cy/NYT-Connections` dataset provided by Hugging Face, download the raw JSON to `data/raw/nyt_connections_hf.json`, and save the normalized puzzles to `data/processed/nyt_official.json`.
+- Use the function `build_dataset_assets()` to standardize the official data, extract semantic, theme, and form banks, and collect information such as word frequency, label frequency, and prefix/suffix patterns.
+- Infer the category of each official group (`semantic`, `theme`, or `form`), and build category banks and word-frequency statistics. These statistics are used in later versions to determine group difficulty and filtering rules.
 
-Compared with v4, the current `codex-sta561-v5` branch adds four major pieces of progress:
+Improvement: Established a unified data format and basic bank management for subsequent generators, and provided a foundation of word-frequency and label statistics for difficulty evaluation.
 
-- a **low-cost batch generator** that builds many structurally sound puzzles without relying on repeated heavy generate-and-reject loops,
-- a **compatibility-graph-based sampling path** that directly encodes cheap hard constraints such as word overlap, mechanism-family duplication, rhyme-ending reuse, and theme-frame reuse,
-- a **batch review dashboard** where instructors can generate 10K puzzles with a visible progress bar, then sample and inspect puzzles by ID,
-- and a separate **player-facing game page** that presents one-click puzzle generation, shuffle/submit/deselect interactions, mistake tracking, solved-group colors, and end-of-game sharing.
+### v3 - Baseline Generator and Preliminary Validation
 
-v4 remains useful as the stricter reference pipeline; v5 focuses on throughput, maintainability, and practical evaluation at scale.
+Goal: Build a basic puzzle generation and assembly pipeline on the unified bank, and add a preliminary validation and visualization interface.  
+Functions:
 
-## v6 Final Update
+- Introduce group generators (`semantic/theme/form/anagram`) and an assembler, enabling candidate groups to be generated from the bank and assembled into complete puzzles.
+- Introduce a preliminary puzzle validation module to check basic structural correctness and simple duplication/ambiguity issues.
+- Add a Streamlit frontend so users can generate and play puzzles online.
 
-Compared with v5, the current `codex-sta561-v6-final` branch adds the final submission guarantees:
+Limitations: v3 lacks systematic evaluation of group difficulty, has low generation efficiency, and produces puzzles with relatively unstable quality.
 
-- an **all-bank independence check** that compares independently authored semantic/theme/form/anagram banks against the official NYT banks and fails runtime initialization if any curated overlap is found,
-- a **final low-cost batch generator** that still uses compatibility-graph sampling instead of v4-style heavy rejection loops,
-- a **default reviewer interface** centered on final-batch generation and audit sampling,
-- a cleaned-up **player-facing final page** layered on top of the same cheap final generator,
-- and final generated groups that no longer carry `source_puzzle_id` references into output puzzles because the final banked groups are no longer sourced from official NYT entries.
+### v4 - High-Quality Validation Pipeline
 
-The purpose of v6 final is not to recover every expensive v4 guarantee. Instead, it is to produce a submission-ready version that scales to the competition workflow: generate a large batch quickly, then let instructors review a random subset manually.
+Goal: Strengthen difficulty control, ambiguity detection, and puzzle quality on the basis of v3, and introduce a stricter validator.
 
-## v4 Architecture
+Main features:
 
-The v4 pipeline still follows the same high-level flow:
+#### Generation/Assembly Flow
 
-1. `src/data_utils/dataset_loader.py`
-   Loads the HuggingFace `tm21cy/NYT-Connections` dataset, normalizes it into the shared schema, builds reusable category banks, and now also persists pattern-frequency statistics for the word pool.
-2. `src/generators/generator_resources.py`
-   Loads the reusable banks and word pool, reads the external form-pattern blacklist, exposes WordNet/pronouncing helpers, and provides shared scoring/filtering utilities.
-3. `src/generators/semantic_generator.py`, `theme_generator.py`, `form_generator.py`
-   Build and prefilter candidate groups, attach normalized v4 difficulty metadata, and reject self-revealing or overly ambiguous candidates before assembly.
-4. `src/generators/similarity_tools.py`
-   Provides pretrained-vector similarity through `gensim` GloVe embeddings, with a lexical fallback if embeddings are unavailable.
-5. `src/generators/puzzle_analysis.py`
-   Computes puzzle-level difficulty, decoys, ambiguity signals, singleton-word risk, and cross-group interference.
-6. `src/generators/puzzle_assembler.py`
-   Assembles four groups under difficulty-tier, misleadingness, rhyme-ending, and ambiguity constraints using seeded randomness.
-7. `src/validators/puzzle_validators.py`
-   Re-validates structure, style, ambiguity, difficulty profile, singleton-word checks, duplicate risk, multi-solution risk, and similarity metrics.
-8. `src/batch_generate_and_score.py`
-   Batch-generates accepted puzzles into `accepted_v4.json` with a corresponding `generation_report_v4.json`.
-9. `src/app/app.py`
-   Compatibility Streamlit entrypoint that forwards to the main dashboard module.
+v4 retains the basic structure of v3, but comprehensively upgrades the loader, generator, assembler, and validator, forming a complete quality-oriented pipeline:
 
-## Data Loading And Resources
+- Data loading: `src/data_utils/dataset_loader.py` loads and standardizes the official dataset while also building pattern statistics (such as prefix/suffix frequencies) to support form-group filtering.
+- Resource management: `src/generators/generator_resources.py` is responsible for loading shared semantic, theme, form, and anagram banks, and provides auxiliary tools such as WordNet, pronunciation libraries, word frequency, and blacklists.
+- Group generators: `semantic_generator.py`, `theme_generator.py`, `form_generator.py`, and others are responsible for generating candidate semantic, theme, and form groups and attaching difficulty metadata. The generators filter out candidates that are obviously self-revealing or overly vague.
+- Similarity tools: `similarity_tools.py` uses GloVe word vectors to provide similarity calculations between words, and falls back to morphology-based approximations when word vectors are unavailable.
+- Puzzle analysis: `puzzle_analysis.py` calculates puzzle-level difficulty, decoy/interference, ambiguity, and word isolation, providing detailed metrics for validation.
+- Puzzle assembly: `puzzle_assembler.py` assembles 4 groups according to conditions such as difficulty tiers and rhyme-ending constraints, using a weighted selection strategy to balance misleadingness and ambiguity risk.
+- Validator: `validators/puzzle_validators.py` rechecks issues such as structure, duplication, difficulty coverage, misleadingness, rhyme-ending conflicts, and singleton words, and outputs detailed rejection reasons.
 
-The loader still writes:
+#### Difficulty Control
 
-- `data/processed/nyt_official.json`
-- `data/processed/nyt_dataset_stats.json`
+- Semantic groups use WordNet hypernym depth to evaluate concept specificity; the greater the depth, the more specific and therefore the harder the group.
+- Form groups evaluate difficulty based on the coverage of the shared pattern across the entire bank; the smaller the coverage, the greater the difficulty.
+- Theme groups measure "distractibility" by calculating how strongly outside words relate to the label; the more related words there are, the harder the group.
 
-v4 extends the saved statistics with `pattern_statistics`, including reusable prefix and suffix counts over the alphabetic word pool. Those stats support the new form-group rarity filtering and README-visible reporting.
+#### Misleadingness and Similarity
 
-The form generator also loads an external blacklist from:
+v4 uses GloVe vectors to actively add misleading words, increasing puzzle challenge by controlling cross-group similarity while avoiding excessive ambiguity.
 
-- `data/raw/form_pattern_blacklist.txt`
+#### Rhymes and Pronunciation
 
-Patterns in that file, or any spelling/phonetic pattern covering more than 30% of the reusable word pool, are treated as too broad and filtered out before puzzle assembly. This prevents trivial groups such as words that all begin with a meaningless high-frequency chunk.
+With the help of the `pronouncing` library (CMU Pronouncing Dictionary), rhyme endings are identified, shared-rhyme-ending groups are constructed, and two rhyme-based groups with the same rhyme ending are forbidden from appearing in the same puzzle.
 
-## Group Generation
+#### Batch Generation
 
-### Semantic Groups
+`batch_generate_and_score.py` provides batch generation, allowing parameters such as the number of generated candidates, target accepted count, and random seed to be specified, and outputs both generation reports and accepted puzzles.
 
-Semantic groups come from the official semantic bank plus curated fallback banks. v4 rejects a semantic candidate if:
+Advantages and disadvantages: v4 provides high-quality puzzles, but generation cost is high, making it suitable for single puzzles or small-batch generation and difficult to support the 10K-scale competition requirement.
 
-- it repeats a word,
-- its label directly reveals one of its words,
-- or two or more words also collapse into a broad alternate category such as `person`, `animal`, `food`, `place`, `plant`, or `body_part`.
+### v5 - Low-Cost Batch Generation
 
-**Difficulty metric:** WordNet concept specificity.
+Goal: Provide a fast large-scale generation pipeline for competition needs, significantly reducing the cost of generating a single puzzle and trading off some quality guarantees for high throughput.
 
-For each semantic label, v4 looks up noun synsets in WordNet and uses the minimum hypernym depth (`synset.min_depth()`) as a specificity signal. Deeper concepts are treated as harder. The raw depths are normalized across the semantic bank and mapped into `easy`, `medium`, and `hard`.
+Improvements:
 
-### Form Groups
+- Low-cost batch generator: `puzzle_generator_v5.py` adopts a preprocessing mode, loading all candidate groups once, building a compatibility graph, and then directly sampling four compatible group combinations on the graph, avoiding the expensive per-puzzle generation and validation loop in v4.
+- Compatibility constraints: During graph construction, the compatibility of each pair of groups is computed (no repeated words, labels, rhyme endings, mechanisms, or theme frames), thereby ensuring rapid sampling.
+- Mechanism families and theme frames: Compute `mechanism_family` and `theme_frame_family` for each group, avoiding repeated mechanism types or identical theme frames during sampling and thereby making puzzles more diverse.
+- Cheap metrics: v5 no longer computes complex distractibility or ambiguity scores, instead using group compatibility, category usage counts, and a small amount of randomness to rank candidate groups.
+- Batch output: `batch_generate_v5.py` can generate tens of thousands of puzzles at once and produce a generation report including runtime, generation rate, mechanism-family statistics, theme-frame statistics, and difficulty statistics.
+- Interface: `src/app/Evaluation.py` provides a reviewer dashboard that allows the generation of 10K puzzles and sampled inspection; `src/app/pages/Play.py` provides the player interface, including a 4x4 grid, shuffle/submit/deselect operations, error prompts, and a share string.
 
-Form groups come from:
+Main differences:
 
-- the official form bank,
-- curated fallback form groups,
-- dynamic shared-prefix groups,
-- dynamic shared-suffix groups,
-- phoneme-level rhyme groups,
-- and phoneme-level homophone groups.
+- v5 removes the complex validation in v4 and retains only structural hard constraints, greatly increasing generation speed.
+- v5 uses reused banks, so generated groups may contain groups from the official bank; it is suitable for the competition training stage rather than the final submission.
 
-v4 filters form groups if:
+### v6 Final - Submission Version
 
-- the spelling/phonetic pattern is blacklisted,
-- the pattern covers more than 30% of the word pool,
-- the group is self-revealing,
-- the group reuses a rhyme ending already chosen for the same puzzle,
-- or the words also create an overly broad alternate category.
+Goal: On the basis of v5's high throughput, satisfy the strict requirements of the final competition submission, namely that all semantic, theme, form, and anagram groups must be generated entirely from independently authored banks and must not overlap with the official New York Times bank.
 
-**Difficulty metric:** pattern rarity.
+Core changes:
 
-The fewer words in the reusable word pool that match the group’s pattern, the higher the difficulty. v4 stores the match count, coverage ratio, normalized difficulty score, and tier for every form group.
+- Independence checks: At runtime, compare the signatures of the independent semantic/theme/form/anagram banks with the official bank, and fail immediately if any overlap is found, ensuring that the final submitted puzzles are completely original.
+- Low-cost final generator: `puzzle_generator_v6.py` maintains a compatibility-sampling strategy similar to v5, but further tightens the candidate-list cap (`SELECTION_CANDIDATE_CAP`) and generation attempt multiplier (`GENERATION_ATTEMPT_MULTIPLIER`), and sets limits on the number of semantic, theme, and form groups in each puzzle in order to maintain the speed of 10K-scale generation.
+- Independent bank loading: `load_independent_semantic_bank()`, `load_independent_theme_bank()`, `load_independent_form_bank()`, and `load_independent_anagram_bank()` load the semantic, theme, form, and anagram banks written by the team, and use standardized signatures to check for overlap with the official bank.
+- Cache clearing and warm start: v6 provides the function `clear_v6_runtime_caches()` to clear caches before batch generation, ensuring that the statistics show a more realistic initialization time.
+- Type caps and compatibility: During sampling, separate maximum counts are set for semantic groups, theme groups, and form groups (defaulting to 1/2/2), preventing too much repetition of the same mechanism type within a puzzle.
+- Output format: The generator records, for each puzzle, the bank modes used, such as `semantic_bank_mode` and `official_overlap_check`, in order to prove that the independence checks have passed.
+- Interface adjustments: `src/app/Evaluation.py` focuses by default on generation and review; `src/app/pages/Play.py` provides the final player interface, allowing users to click once to generate a final puzzle and experience the complete gameplay process.
 
-### Theme Groups
+Summary of differences: Compared with v5, the biggest difference in v6 is the source of the semantic/theme/form/anagram banks and the independence checks; compared with v4, v6 abandons complex per-puzzle validation and still maintains low-cost generation, but adds bank independence and a small number of diversity limits, making it the final version suitable for large-scale submission.
 
-Theme groups still come from the official theme bank plus curated fallbacks, but they now receive the same ambiguity/self-reveal prefilters as semantic groups.
+## Architecture and Key Modules
 
-**Difficulty metric:** distractibility.
+To better understand this project, we introduce the main modules in the order from data processing to puzzle generation and then to interface presentation.
 
-At load time, v4 estimates how many outside words in the full reusable word pool still point toward the theme label. During assembly, that score is adjusted again using the actual 12 outside words in the current 16-word puzzle. Themes with more outside associations are treated as harder because they create more plausible false leads.
+### 1. Data Loading and Standardization
 
-## Word Vectors And Decoys
+Data source: The project uses the `tm21cy/NYT-Connections` dataset on Hugging Face, which contains hundreds of official puzzles and their four answer groups. The loader supports downloading data from a remote URL and caching it locally.
 
-v4 deliberately adds misleadingness during assembly instead of treating all cross-group similarity as a bug.
+Standardization flow:
 
-`src/generators/similarity_tools.py` uses pretrained GloVe word vectors via `gensim.downloader`:
+- `download_hf_dataset()` downloads the raw JSON (saved by default to `data/raw/nyt_connections_hf.json`).
+- `normalize_hf_dataset()` converts each raw record into a unified internal format, including `puzzle_id`, the four groups' `label`, `words`, and grouping type `type`.
+- `build_category_banks()` divides the standardized puzzle groups into semantic, theme, and form categories according to type, deduplicates them, and outputs category banks.
+- `collect_dataset_statistics()` counts word frequency, label frequency, number of mechanisms, prefix/suffix patterns, and other information for difficulty estimation and filtering.
 
-- backend: `glove-wiki-gigaword-50`
-- fallback: lexical token/trigram similarity if embeddings cannot be loaded
+Inferring group type: `infer_group_type()` determines the mechanism type of a group (`semantic/theme/form`) based on the group label, word pattern, and common hint words. For example, labels containing keywords such as `___` or `ANAGRAM` are classified as form groups.
 
-These vectors are used to:
+### 2. Resources and Helper Functions (`generator_resources`)
 
-- compare a word to its own label and competing labels,
-- identify decoy words that also fit another group’s label,
-- estimate theme distractibility,
-- detect over-ambiguous assignments,
-- and reject singleton words that have no meaningful cross-group hook.
+- Shared bank loading: This module provides methods to load and cache semantic, theme, form, and anagram banks and their metadata, including reading independent banks and official banks and computing standardized signatures.
+- Difficulty/pattern recognition: It provides functions for detecting form subtypes (prefix, suffix, rhyme, homophone), pattern values, WordNet hierarchy depth, pronunciation, and rhyme-ending extraction, supplying foundational information for generators and validators.
+- Independence checks: In v6, when independent banks are loaded, the label+word signatures are computed and compared with the official banks, and an error is raised if any duplication exists.
 
-During assembly, v4 prefers combinations where every group has at least one word that looks plausible under another group’s label, but it penalizes combinations where too many words fit the wrong label more strongly than the intended one.
+### 3. Group Generators
 
-## WordNet Specificity
+The generators construct candidate groups into a unified format according to mechanism type and attach difficulty information.
 
-Semantic difficulty relies on the WordNet hypernym/hyponym “is-a” hierarchy:
+#### 3.1 Semantic Groups (`semantic_generator`)
 
-- shallow nodes are more general,
-- deeper nodes are more specific,
-- and more specific labels are treated as harder.
+Sources: Official semantic bank, independent semantic bank, and other backup groups.
 
-This is why v4 uses `min_depth()` from the label’s noun synsets: it is a compact proxy for concept professionalism/specificity.
+Filtering rules:
 
-If WordNet is unavailable, the code degrades gracefully, but for best results install the corpus data with:
+- No repeated words may appear in the group.
+- The label must not directly reveal the words.
+- At least two words must not belong to an overly broad alternative category (such as `person` or `animal`).
 
-```bash
-python -m nltk.downloader wordnet omw-1.4
+Difficulty metric: Use WordNet hypernym depth; the more specific the concept is (the greater the depth), the higher the difficulty.
+
+#### 3.2 Form Groups (`form_generator`)
+
+Sources: Official form bank, independent form bank, dynamically constructed shared-prefix/shared-suffix groups, rhyme-ending groups, homophone groups, and so on.
+
+Filtering rules:
+
+- Block patterns in the blacklist (such as high-frequency prefixes/suffixes), and filter out patterns whose coverage exceeds 30%.
+- Forbid self-revealing groups or the recreation of existing rhyme endings.
+- Avoid groups whose words also form overly broad semantic categories.
+
+Difficulty metric: Compute the number of words matching the pattern; the fewer there are, the higher the difficulty.
+
+#### 3.3 Theme Groups (`theme_generator`)
+
+Sources: Official theme bank, independent theme bank, and manually curated backup themes.
+
+Filtering rules: Likewise, groups must not contain repeated words or self-revealing labels, and word vectors are used to evaluate similarity and distractibility between words and labels.
+
+Difficulty metric: Estimate how many outside words are associated with the theme label; the more associations there are, the greater the misleadingness and the higher the difficulty.
+
+#### 3.4 Anagram Groups (`anagram_generator`)
+
+Sources: Construct all possible anagram groups from the existing bank (four words are mutual anagrams).
+
+Filtering rules: Ensure that they do not duplicate official form groups; provide the anagram-group generation function `list_independent_anagram_groups_v6()` for the v6 independent bank.
+
+### 4. Word Vectors and Misleadingness (`similarity_tools`)
+
+GloVe vectors: The project uses `gensim.downloader` to load the `glove-wiki-gigaword-50` word vectors, which are used during generation and validation to measure similarity between words and labels or other words.
+
+Misleading strategy: During assembly, v4 actively selects some words that also seem plausible under other groups' labels, creating a "decoy" effect and increasing puzzle interest, while using thresholds to prevent excessive ambiguity.
+
+When word vectors are unavailable: If the vectors cannot be loaded, the system falls back to trigram similarity based on word form.
+
+### 5. Pronunciation and Rhyme Endings (`pronouncing` and rhyme logic)
+
+The project uses the `pronouncing` library (a wrapper around the CMU Pronouncing Dictionary) to identify the pronunciation of words and extract rhyme endings through `rhyme_ending()`, which is used to construct rhyme groups.
+
+To ensure puzzle quality, the generator requires that no two rhyme-based groups sharing the same rhyme ending appear in the same puzzle.
+
+v4 also adds a spelling-based tail check to prevent confusion caused by words that have different pronunciations but the same spelling tail.
+
+### 6. Puzzle Analysis (`puzzle_analysis`)
+
+Purpose: Evaluate overall puzzle quality after assembly, including metrics such as difficulty, misleadingness, ambiguity, and singleton words.
+
+Metrics:
+
+- `interference_score`: Measures the degree of misleadingness between different groups.
+- `decoy_group_count`: Counts the number of tempting words each group provides to other groups.
+- `ambiguous_word_count`: Counts overly ambiguous words.
+- `singleton_word_count`: Detects singleton words (words that have no misleading effect at all).
+- `average_within_group_similarity` and `average_cross_group_similarity`: Measure within-group and cross-group similarity.
+
+Function: These metrics are used by the validator to decide whether a candidate puzzle meets the quality standards of v4.
+
+### 7. Puzzle Assembly (`puzzle_assembler`, v4)
+
+Mechanism plan: v4 randomly chooses among three mechanism orders (such as `[semantic, theme, form, semantic]`) and randomly assigns difficulty tiers (`easy`, `medium`, `hard`) to the four groups.
+
+Compatibility checks: Whenever a candidate group is selected, repeated words, labels, and rhyme endings are checked, and difficulty and mechanism balance must be satisfied.
+
+Candidate scoring: Scores are computed using interference, ambiguity penalties, base difficulty, and a small amount of noise, and the best candidates are selected by weight.
+
+Analysis and validation: After assembly is completed, `puzzle_analysis.analyze_puzzle_groups()` is called to compute all metrics, and the puzzle is returned only if all thresholds are satisfied; otherwise, attempts continue until the maximum number of attempts is reached.
+
+### 8. Low-Cost Batch Generator v5
+
+`puzzle_generator_v5.py` quickly generates a large number of puzzles through the following steps:
+
+- Preprocessing: Call `list_semantic_groups()`, `list_theme_groups()`, `list_form_groups()`, and `list_anagram_groups()` once to obtain all candidate groups and filter out structurally invalid groups.
+- Normalized records: Each candidate group is converted into a `GroupRecord`, storing information such as the word-key set, mechanism family, theme frame, and difficulty tier.
+- Compatibility graph construction: Precompute the compatibility of any two groups and store all compatible groups in adjacency lists so that sampling can query them quickly.
+- Sampling strategy: Use backtracking weighted sampling, rank candidates according to mechanism usage counts and theme-frame usage counts, and randomly choose four compatible groups.
+- Duplicate control: Use signatures (sorted by word sets) to identify duplicate puzzles, trying to skip duplicates early and allowing duplicates later for speed.
+- Output: Build a puzzle object and record generation metadata such as group mechanism families and theme frames for evaluation and statistics.
+
+### 9. Final Submission Generator v6
+
+In v6, the generator `puzzle_generator_v6.py` retains the compatibility-sampling framework of v5, but strengthens the input source and sampling strategy:
+
+- Independent bank loading: Use `load_independent_semantic_bank()`, `load_independent_theme_bank()`, `load_independent_form_bank()`, and `load_independent_anagram_bank()` to load completely independent banks and reject signatures contained in the official banks.
+- Compatibility graph: Combine the semantic, theme, form, and anagram banks, then filter invalid groups and build the compatibility adjacency list.
+- Type buckets and caps: Assign each group a `type_bucket` (`semantic`, `theme`, `form_like`) and set caps: each puzzle may contain at most 1 semantic group, 2 theme groups, and 2 form/anagram groups.
+- Candidate ordering: Order candidates only according to compatibility (adjacency degree) and randomness, avoiding the global usage counts of v5 in order to reduce backtracking.
+- Duplicate control: Similar to v5, use signatures to skip duplicate puzzles during generation, but allow duplicate restrictions to loosen later in the generation process to guarantee output volume.
+- Generation metadata: The `generation` field of each puzzle records bank-source modes and independence-check results, such as `semantic_bank_mode: independent_v6` and `official_overlap_check: passed`.
+
+### 10. Validator (`validators/puzzle_validators.py`)
+
+Although v5 and v6 no longer run heavy validation in the main generation loop, the validator can still be used for analysis and scoring. Its main checks include:
+
+- Structural validity: Whether there are 4 legal groups and no repeated words.
+- Difficulty coverage: Includes at least one easiest and one hardest difficulty group.
+- Misassigned-word detection: Prevents a word from fitting another label significantly better.
+- Induction and ambiguity: Measures cross-group similarity and misleadingness to avoid overly vague puzzles.
+- Rhyme-ending conflicts: Ensures that rhyme endings do not repeat within a puzzle.
+- Singleton words: Rejects isolated words that have no misleading effect whatsoever.
+
+These checks are mandatory in v4, while in v5/v6 they are more often used for evaluation and scoring rather than as blocking generation conditions.
+
+## Repository Structure and Main Files
+
+The project's code is distributed across the `data/`, `docs/`, and `src/` directories, among which the `src/` directory contains the main generation logic. According to the current `codex/v6-final` branch, the key added or modified files include:
+
+| Version | Added/Modified Files | Function Summary |
+| --- | --- | --- |
+| v4 | `src/generators/similarity_tools.py`, `src/generators/puzzle_analysis.py` | Added similarity tools and puzzle-analysis modules for computing word-vector similarity and interference |
+|  | `src/data_utils/dataset_loader.py` and multiple generator and validator modules | Improved the loader, generators, assembler, and validator to implement the high-quality pipeline |
+|  | `data/raw/form_pattern_blacklist.txt` | Form-group pattern blacklist to improve filtering quality |
+| v5 | `src/generators/puzzle_generator_v5.py`, `src/batch_generate_v5.py` | Added the v5 low-cost batch generator and batch script |
+|  | `src/app/Evaluation.py`, `src/app/pages/Play.py` | Updated the Streamlit dashboard and player interface |
+| v6 | `src/generators/puzzle_generator_v6.py`, `src/batch_generate_v6.py` | Added the v6 final generator and batch script |
+|  | `src/app/final_game_logic.py`, `src/app/pages/Play.py` | Added player-state logic and the final player interface |
+|  | Modified `src/generators/generator_resources.py`, `src/generators/semantic_generator.py`, `src/app/app.py` | Support independent banks, independence checks, and default interface adjustments |
+
+The overall directory structure is as follows:
+
+```text
+project_root/
+├── data/             # Data directory, divided into raw / processed / generated
+│   ├── raw/
+│   ├── processed/
+│   └── generated/    # Generated puzzle libraries and generation reports
+├── docs/             # Documentation directory, such as puzzle_format.md, v2_dataset_and_generation_report.md
+├── src/              # Source code directory
+│   ├── app/          # Streamlit app and pages
+│   ├── data_utils/   # Data loading and standardization
+│   ├── generators/   # Generators and helper modules for each version
+│   ├── validators/   # Validator modules
+│   ├── batch_generate_and_score.py  # v4 batch-generation script
+│   ├── batch_generate_v5.py         # v5 batch-generation script
+│   ├── batch_generate_v6.py         # v6 batch-generation script
+│   └── ...
+└── requirements.txt  # Python dependency list
 ```
 
-## Pronouncing / CMU Dictionary Rhyme Logic
+## Usage Guide
 
-v4 uses the `pronouncing` library, which wraps the CMU Pronouncing Dictionary, so rhyme groups are based on phoneme endings rather than spelling.
+### Environment Setup
 
-That means differently spelled words with the same sound can still be grouped together.
-
-Example:
-
-```python
-import pronouncing
-
-for word in ["ell", "el"]:
-    phones = pronouncing.phones_for_word(word)
-    print(word, phones, pronouncing.rhyming_part(phones[0]))
-```
-
-In v4, rhyme generation works like this:
-
-- look up pronunciations with `pronouncing.phones_for_word(...)`,
-- derive the rhyme ending with `pronouncing.rhyming_part(...)`,
-- bucket candidate words by that phoneme suffix,
-- require the visible rhyme target in the label to be absent from the actual group,
-- and lower the sampling weight of high-frequency rhyme endings.
-
-The assembler also forbids two rhyme groups with the same phoneme ending from appearing in one puzzle.
-
-v4 also adds a visual rhyme-tail safeguard on top of the CMU-based rhyme logic. Phoneme-level validation correctly separates words that look similar but do not actually rhyme, such as `HAD` and `WAD`, but those words can still create low-quality overlap because they share a strong visible tail like `-AD`. To reduce that ambiguity, the pipeline checks whether outside words visually match the target-centered spelling tail of a rhyme family, and rejects the candidate puzzle if the overlap is too strong.
-
-## Puzzle Assembly
-
-`src/generators/puzzle_assembler.py` now exposes:
-
-- `generate_candidate_puzzle_v4(...)`
-- `generate_candidate_puzzles_v4(...)`
-
-Assembly is seeded and deterministic with respect to sampling order.
-
-Each candidate puzzle must satisfy all of the following before it is returned:
-
-- exactly 4 groups with no repeated words,
-- difficulty-tier coverage across `easy`, `medium`, and `hard`,
-- puzzle-average difficulty inside a fixed interval,
-- at least one easiest-tier group and one hardest-tier group,
-- no repeated rhyme ending across rhyme groups,
-- every group must contain at least one decoy word,
-- no self-revealing group,
-- no word that is more strongly pulled to the wrong label by too large a margin,
-- and no singleton word with no plausible cross-group link.
-
-The assembler does not simply pick groups independently. It scores candidate combinations by:
-
-- embedding similarity from words to competing labels,
-- pattern-match spillover into other groups,
-- cross-word similarity across groups,
-- ambiguity risk penalties,
-- and a small seeded random component.
-
-That makes the final puzzles more misleading than v3, but still keeps them playable.
-
-## Validation
-
-`src/validators/puzzle_validators.py` still checks structure, duplication, solver uniqueness, and similarity metrics, but v4 adds explicit checks for:
-
-- difficulty-tier coverage and puzzle difficulty range,
-- decoy presence for all four groups,
-- label-based ambiguity using embedding similarity,
-- visual rhyme-tail overlap for non-rhyming but visibly similar outside words,
-- singleton-word rejection,
-- and updated high-confusion tolerance consistent with the new decoy-aware design.
-
-The validator returns detailed `reason_groups` and metrics such as:
-
-- `puzzle_difficulty`
-- `interference_score`
-- `decoy_group_count`
-- `ambiguous_word_count`
-- `singleton_word_count`
-- `average_within_group_similarity`
-- `average_cross_group_similarity`
-
-## Batch Generation
-
-Default v4 outputs:
-
-- `data/generated/accepted_v4.json`
-- `data/generated/generation_report_v4.json`
-
-Example:
-
-```bash
-python src/batch_generate_and_score.py --target-accepted 100 --num-candidates 250 --seed 561
-```
-
-Useful flags:
-
-- `--seed`
-- `--num-candidates`
-- `--target-accepted`
-- `--within-threshold`
-- `--cross-threshold`
-- `--max-solutions`
-- `--progress-every`
-- `--force-refresh-dataset`
-- `--accepted-output`
-- `--report-output`
-
-The `--seed` argument controls the v4 sampling order, so rerunning with the same seed and the same resource state produces reproducible candidate selection behavior.
-
-## v5 Architecture
-
-The v5 pipeline is intentionally different from v4. Instead of repeatedly assembling a candidate, running heavy ambiguity analysis, and rejecting most attempts, v5 moves the expensive work into one-time preprocessing and keeps the per-puzzle sampling path cheap.
-
-Main v5 modules:
-
-1. `src/generators/puzzle_generator_v5.py`
-   Loads the semantic/theme/form/anagram banks once, normalizes them into reusable group records, assigns `mechanism_family` and `theme_frame_family`, and builds a lightweight compatibility graph. Puzzle generation then samples four mutually compatible groups directly from that graph.
-2. `src/batch_generate_v5.py`
-   Batch-generates `generated_v5.json` and `generation_report_v5.json`, with defaults oriented toward the 10K-puzzle audit workflow.
-3. `src/app/Evaluation.py`
-   Established the reviewer-dashboard pattern that the final branch still uses: generate a large batch on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
-4. `src/app/pages/Play.py`
-   The final branch's player-facing page inherits the same v5 interaction model: a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary layered on top of the cheap generator.
-5. `src/app/final_game_logic.py`
-   The final branch's game-state module keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
-
-### v5 Hard Constraints
-
-v5 still enforces cheap but important structural constraints during compatibility-graph construction:
-
-- no word overlap between groups,
-- no duplicate normalized labels,
-- no repeated rhyme ending,
-- no repeated form-like `mechanism_family`,
-- and no repeated theme `theme_frame_family`.
-
-This means one puzzle will not contain two rhyme groups with the same mechanism role, or two theme groups that both use the same broad frame such as `AT ...` or `WORDS AFTER ...`.
-
-### v5 Outputs
-
-Default v5 outputs:
-
-- `data/generated/generated_v5.json`
-- `data/generated/generation_report_v5.json`
-
-Example:
-
-```bash
-python src/batch_generate_v5.py --count 10000 --seed 561
-```
-
-The report includes lightweight batch statistics such as runtime build time, generation time, throughput, mechanism-family counts, theme-frame counts, and difficulty-tier counts.
-
-## v6 Final Architecture
-
-The final branch keeps the cheap v5 batch-generation strategy, but changes the semantic-source rule and tightens the branch around the actual submission target.
-
-Main v6 final modules:
-
-1. `src/generators/puzzle_generator_v6.py`
-   Uses the same low-cost compatibility-graph approach as v5, but swaps in independent semantic/theme/form/anagram inputs for the final branch, blocks curated-bank overlap with official NYT groups, and applies practical diversity caps to keep 10K-scale generation cheap.
-2. `src/batch_generate_v6.py`
-   Batch-generates `generated_v6_final.json` and `generation_report_v6_final.json`, with defaults aimed at the final submission workflow.
-3. `src/app/Evaluation.py`
-   Acts as the **final batch reviewer dashboard** on this branch. It can generate the final library on demand, show progress during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
-4. `src/app/pages/Play.py`
-   Provides the separate **player-facing final page** with one-click puzzle generation, shuffle/submit/deselect controls, mistake tracking, solved-group colors, and share text.
-5. `src/app/final_game_logic.py`
-   Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
-
-### v6 Final Independence Rule
-
-The final branch adds one hard submission rule:
-
-- semantic, theme, form, and anagram base banks must come from independently authored sources,
-- those banks are checked against the corresponding official NYT banks by normalized label-plus-word signature and by normalized word-set signature,
-- and generation/runtime initialization fails immediately if any curated overlap is found.
-
-For dynamic form-like groups such as runtime-built rhyme or homophone sets, v6 final filters out any group whose normalized label/word signature would directly reuse an official NYT form group.
-
-This makes official-bank independence a hard invariant rather than a soft filtering preference.
-
-### v6 Final Speed-Oriented Limits
-
-v6 final still avoids the high-cost parts of v4, but it also adds a few cheap guardrails so the final 10K batch remains fast:
-
-- a tighter candidate-order cap during clique expansion,
-- a smaller global attempt multiplier for large batches,
-- a smaller duplicate-skip budget so the generator does not waste time chasing global uniqueness,
-- and simple per-puzzle type caps such as limiting how many semantic, theme, or form-like groups can appear in one puzzle.
-
-These are all low-cost controls that reduce branching without bringing back heavy puzzle-level validation.
-
-### v6 Final Outputs
-
-Default final outputs:
-
-- `data/generated/generated_v6_final.json`
-- `data/generated/generation_report_v6_final.json`
-
-Example:
-
-```bash
-python src/batch_generate_v6.py --count 10000 --seed 561
-```
-
-## Streamlit App
-
-Launch the app with:
-
-```bash
-streamlit run src/app/app.py
-```
-
-On the `codex-sta561-v6-final` branch, the default Streamlit entrypoint is now the **Evaluation** page. It can:
-
-- generate a large final library directly from the app,
-- show progress during runtime build and batch generation,
-- save `generated_v6_final.json` and `generation_report_v6_final.json`,
-- sample puzzles by ID for manual review,
-- and display the full answer set plus cheap metadata for each sampled puzzle.
-
-This branch also includes a separate **Play** page under Streamlit's multipage navigation. The player page can:
-
-- generate a fresh playable final puzzle,
-- show a 4x4 clickable tile grid,
-- support `Shuffle`, `Submit`, and `Deselect All`,
-- track `Mistakes Remaining`,
-- reveal solved groups in yellow/green/blue/purple order,
-- and show a simple share string after the game ends.
-
-The underlying v4 and v5 generation modules are still present in the repository for comparison and history, but the default app flow on this branch is centered on final generation/review/play rather than the older v4 live-generator page.
-
-## How To Run
+Clone the repository and switch to the `codex/v6-final` branch.
 
 Install dependencies:
 
@@ -410,137 +298,71 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Build or refresh the normalized dataset assets:
+### Build or Refresh the Dataset
+
+Before using the generator, you need to download and standardize the official dataset (for certain statistics and helper information). Run:
 
 ```bash
 python src/data_utils/dataset_loader.py
 ```
 
-Generate a v4 library:
+This command will download the dataset (if no local cache exists), generate the standardized files `data/processed/nyt_official.json` and `data/processed/nyt_dataset_stats.json`, and output a summary of bank statistics.
+
+### Generate Puzzle Libraries
+
+Depending on the generator, the following commands can be used to generate batch puzzle libraries:
+
+#### v4 High-Quality Single-Puzzle/Small-Batch Generation
 
 ```bash
 python src/batch_generate_and_score.py --target-accepted 100 --num-candidates 250 --seed 561
 ```
 
-Generate a v5 library:
+This command will attempt to generate 250 candidate puzzles and accept 100 of them, using heavy validation to ensure quality. The generated results are saved to `data/generated/accepted_v4.json` and `generation_report_v4.json`.
+
+#### v5 Large-Scale Generation (Competition Training)
 
 ```bash
 python src/batch_generate_v5.py --count 10000 --seed 561
 ```
 
-Generate the final submission library:
+In v5, the generator will rapidly produce 10K puzzles and output `data/generated/generated_v5.json` and `generation_report_v5.json`.
+
+#### v6 Final Submission Batch Generation
 
 ```bash
 python src/batch_generate_v6.py --count 10000 --seed 561
 ```
 
-Start Streamlit:
+The v6 generator uses independent banks and performs independence checks. The results are saved to `data/generated/generated_v6_final.json` and `generation_report_v6_final.json`.
+
+During generation, the `--seed` parameter can be used to guarantee reproducibility; for v4, options such as `--within-threshold`, `--cross-threshold`, and `--max-solutions` can be adjusted to control validation strictness.
+
+### Start the Streamlit App
+
+Use the following command to start the web application:
 
 ```bash
 streamlit run src/app/app.py
 ```
 
-After Streamlit starts on the final branch:
+In the `codex/v6-final` branch, the default homepage is the Evaluation page, which is used to generate and review puzzle libraries; the Play page in the sidebar provides the final player interface, where puzzles can be generated with one click and played.
 
-- the main page is **Evaluation**,
-- and the sidebar/page navigation exposes **Play** as the player-facing interface.
+### Common Issues and Tips
 
-## v5 vs v6 Final
+- Random seed: Using `--seed` in batch generation ensures that each run produces the same puzzle order, making debugging and reproduction easier.
+- Performance: The v5/v6 generators depend on a preprocessed compatibility graph and have relatively high memory usage, so it is recommended to run them in an environment with more memory.
+- Independent banks: To update the independent banks in v6, you need to prepare new JSON files in `data/` or a custom directory and modify the corresponding loading paths in `generator_resources.py`.
+- Custom difficulty range: v4 can control the quality of generated puzzles by adjusting validation thresholds, such as increasing `MIN_DECOY_GROUP_COUNT` or adjusting `MIN_INTERFERENCE_SCORE`, to obtain more challenging puzzles.
 
-Main differences from v5:
+## Conclusion
 
-- v5 focuses on cheap large-scale generation from reused banks; v6 final keeps that batch strategy but changes the source policy so semantic/theme/form/anagram base banks must come from independently authored inputs.
-- v5 treats official banks as reusable inputs; v6 final hard-fails if its independently authored banks overlap with the official NYT banks, and it filters out dynamic form-like groups that would still recreate an official form group.
-- v5 already removed v4's heaviest per-puzzle validation from the main loop; v6 final keeps that cheap path and adds a few practical diversity caps so 10K-scale generation stays reliable on modest compute.
-- v5 introduced reviewer/player interfaces; v6 final keeps both interfaces but makes them the default submission-ready surfaces for the branch.
+Through six versions of iteration, the Infinite Connections project has developed a complete puzzle-generation ecosystem:
 
-## v4 vs v5
+- v1/v2 establish the basic data structures and banks;
+- v3 introduces generators and preliminary validation;
+- v4 builds a heavily validated high-quality pipeline, providing precise difficulty control, decoy design, and rhyme filtering;
+- v5 adopts a compatibility-graph sampling strategy for competition needs, significantly increasing generation speed and providing review and player interfaces;
+- v6 introduces independent banks and strict independence checks while maintaining the high throughput of v5, ensuring that the final submitted puzzles are completely original.
 
-Main differences from v4:
-
-- v4 is optimized for carefully filtered single-puzzle acceptance; v5 is optimized for generating large libraries quickly.
-- v4 keeps heavy validator-driven checks such as backtracking-based uniqueness and richer ambiguity/confusion analysis in the main path; v5 removes those expensive steps from its primary batch-generation loop.
-- v4 assembles candidates and rejects many of them; v5 preprocesses group metadata once, builds a compatibility graph, and samples directly from compatible group neighborhoods.
-- v4's default app on earlier branches focused on live generation of one puzzle at a time; v5's default app now focuses on batch generation plus manual review, with a separate player-facing page layered on top.
-- v4 is better for demonstrating the stricter puzzle-quality pipeline; v5 is better for the competition workflow of generating 10K puzzles and auditing a random subset.
-
-## v3 vs v4
-
-Main differences from v3:
-
-- v3 mixed banked groups and simple validation; v4 adds typed difficulty scoring, tier balancing, and puzzle-level difficulty control.
-- v3 form groups relied mostly on string patterns; v4 adds blacklist-based triviality filtering, pool-wide coverage checks, and CMU/phoneme-based rhyme detection through `pronouncing`.
-- v3 treated cross-group similarity mostly as a rejection signal; v4 deliberately constructs decoys with pretrained word vectors, then rejects only the combinations that become unfairly ambiguous.
-- v3 had limited rhyme handling and could reuse the same ending across one puzzle; v4 tracks rhyme endings and suppresses repeated endings.
-- v3 did not explicitly reject singleton words; v4 validates that every word has some plausible cross-group distraction.
-- v3 still exposed v2-oriented naming in several interfaces; v4 standardizes function names, output names, logs, and app/library references around `v4`.
-
-## Files Added Or Modified Under `src/`
-
-Added under `src/`:
-
-- `src/generators/similarity_tools.py`
-- `src/generators/puzzle_analysis.py`
-
-Modified under `src/`:
-
-- `src/data_utils/dataset_loader.py`
-- `src/generators/anagram_generator.py`
-- `src/generators/form_generator.py`
-- `src/generators/generator_resources.py`
-- `src/generators/puzzle_assembler.py`
-- `src/generators/semantic_generator.py`
-- `src/generators/theme_generator.py`
-- `src/validators/puzzle_validators.py`
-- `src/batch_generate_and_score.py`
-- `src/app/app.py`
-- `src/app/Evaluation.py`
-
-Related non-`src/` resource added:
-
-- `data/raw/form_pattern_blacklist.txt`
-
-Additional v5 files added under `src/`:
-
-- `src/generators/puzzle_generator_v5.py`
-- `src/batch_generate_v5.py`
-
-Additional v5 files modified under `src/`:
-
-- `src/app/app.py` (compatibility entrypoint)
-- `src/app/Evaluation.py`
-
-Additional v6 final files added under `src/`:
-
-- `src/generators/puzzle_generator_v6.py`
-- `src/batch_generate_v6.py`
-- `src/app/final_game_logic.py`
-- `src/app/pages/Play.py`
-
-Additional v6 final files modified under `src/`:
-
-- `src/generators/generator_resources.py`
-- `src/generators/semantic_generator.py`
-- `src/app/app.py`
-
-## Repository Structure
-
-```text
-data/
-  raw/
-  processed/
-  generated/
-
-docs/
-  puzzle_format.md
-  v2_dataset_and_generation_report.md
-
-src/
-  app/
-  data_utils/
-  generators/
-  validators/
-  batch_generate_and_score.py
-  load_data.py
-  pipeline_demo.py
-```
+Whether for teaching, competition, or personal entertainment, this project provides rich tools and flexible configuration, capable of generating both high-quality single puzzles and large numbers of puzzles for review and gameplay. Readers can choose appropriate versions and modules according to their needs and further extend or improve the generator.
