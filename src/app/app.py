@@ -1,4 +1,4 @@
-"""Streamlit UI for live-generated Infinite Connections v5 puzzles."""
+"""Streamlit UI for live-generated Infinite Connections v4 puzzles."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ import streamlit as st
 from app_runtime import generate_validated_live_puzzle, initialize_v4_runtime
 from validators.duplicate_check import canonicalize_puzzle
 
-st.set_page_config(page_title="Infinite Connections v5", page_icon=":puzzle_piece:", layout="centered")
+st.set_page_config(page_title="Infinite Connections v4", page_icon=":puzzle_piece:", layout="centered")
 
 
 def shuffle_words(words: list[str], seed: int) -> list[str]:
@@ -73,7 +73,7 @@ def reset_current_puzzle_view() -> None:
 
 @st.cache_resource(show_spinner=False)
 def load_runtime() -> dict[str, Any]:
-    """Load and warm the v5 generation runtime exactly once per app process."""
+    """Load and warm the v4 generation runtime exactly once per app process."""
     return initialize_v4_runtime()
 
 
@@ -140,7 +140,7 @@ st.markdown(
 ensure_session_defaults()
 
 if not st.session_state.get("runtime_initialized", False):
-    with st.spinner("Initializing v5 runtime. First load warms embeddings, group banks, and the solver lookup..."):
+    with st.spinner("Initializing v4 runtime. First load warms embeddings, group banks, and the solver lookup..."):
         runtime = load_runtime()
     st.session_state["runtime_initialized"] = True
 else:
@@ -149,7 +149,7 @@ else:
 warmup = runtime["warmup"]
 
 header_columns = st.columns([5, 1.4], vertical_alignment="center")
-header_columns[0].title("Infinite Connections v5")
+header_columns[0].title("Infinite Connections v4")
 
 if header_columns[1].button("Reset Board", use_container_width=True, disabled="puzzle" not in st.session_state):
     reset_current_puzzle_view()
@@ -173,7 +173,7 @@ if control_columns[0].button("Generate New Puzzle", use_container_width=True):
     st.session_state["generation_seed"] = request_seed + 1
 
     try:
-        with st.spinner("Generating and validating a fresh v5 puzzle..."):
+        with st.spinner("Generating and validating a fresh v4 puzzle..."):
             generation_result = generate_validated_live_puzzle(
                 runtime=runtime,
                 seed=request_seed,
