@@ -1,27 +1,27 @@
-"""Helpers for assembling full 16-word puzzles from mechanism-specific groups."""
+"""Helpers for assembling full 16-word v4 puzzles from scored group banks."""
+
+from __future__ import annotations
 
 from random import Random
+from typing import Any
 
-from generators.anagram_generator import sample_anagram_group
 from generators.form_generator import list_form_groups
+from generators.puzzle_analysis import (
+    MIN_DECOY_GROUP_COUNT,
+    MIN_INTERFERENCE_SCORE,
+    analyze_puzzle_groups,
+    cross_word_link_score,
+    pattern_match_score,
+    word_group_affinity,
+)
 from generators.semantic_generator import list_semantic_groups
-from generators.semantic_generator import sample_semantic_group
 from generators.theme_generator import list_theme_groups
-from generators.theme_generator import sample_theme_group
-from generators.form_generator import sample_form_group
+from generators.generator_resources import clone_group, normalize_word_key
 
-DEFAULT_MECHANISM_PLAN = ["semantic", "semantic", "theme", "form"]
-MECHANISM_PLANS = [
-    ["semantic", "semantic", "theme", "form"],
-    ["semantic", "theme", "theme", "form"],
-    ["semantic", "semantic", "theme", "theme"],
-]
-
-V2_MECHANISM_PLANS = [
+V4_MECHANISM_PLANS = [
+    ["semantic", "theme", "form", "semantic"],
+    ["semantic", "theme", "form", "theme"],
     ["semantic", "theme", "form", "form"],
-    ["semantic", "theme", "semantic", "form"],
-    ["semantic", "theme", "theme", "form"],
-    ["semantic", "theme", "form", "anagram"],
 ]
 
 GROUP_LISTERS = {
@@ -30,174 +30,208 @@ GROUP_LISTERS = {
     "form": list_form_groups,
 }
 
-V2_GROUP_BUILDERS = {
-    "semantic": sample_semantic_group,
-    "theme": sample_theme_group,
-    "form": sample_form_group,
-    "anagram": sample_anagram_group,
-}
-
-
 def normalize_word(word: str) -> str:
     """Return a comparison-friendly word key."""
-    return "".join(character for character in word.upper() if character.isalnum())
+    return normalize_word_key(word)
 
 
 def build_puzzle(
     groups: list[dict[str, object]],
     puzzle_id: str,
-    source: str = "generated",
+    source: str = "generated_v4",
+    seed: int | None = None,
+    analysis: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     """Build a puzzle object in the shared internal schema."""
-    copied_groups = [
-        {
-            "label": str(group["label"]),
-            "type": str(group["type"]),
-            "words": list(group["words"]),
-        }
-        for group in groups
-    ]
+    copied_groups = [clone_group(group) for group in groups]
     all_words = [word for group in copied_groups for word in group["words"]]
-
-    return {
+    puzzle: dict[str, Any] = {
         "puzzle_id": puzzle_id,
         "source": source,
         "groups": copied_groups,
         "all_words": all_words,
     }
 
+    if seed is not None:
+        puzzle["seed"] = seed
 
-def choose_group(
-    mechanism: str,
-    rng: Random,
+    if analysis is not None:
+        puzzle["difficulty"] = {
+            "group_scores": [round(float(score), 3) for score in analysis["effective_scores"]],
+            "group_tiers": list(analysis["base_tiers"]),
+            "effective_tiers": list(analysis["effective_tiers"]),
+            "puzzle_score": round(float(analysis["puzzle_difficulty"]), 3),
+        }
+        puzzle["analysis"] = {
+            "interference_score": round(float(analysis["interference_score"]), 3),
+            "decoy_group_count": int(analysis["decoy_group_count"]),
+            "pair_details": analysis["pair_details"],
+            "group_decoys": analysis["group_decoys"],
+        }
+
+    return puzzle
+
+
+def _compatible_group(
+    group: dict[str, Any],
     used_words: set[str],
     used_labels: set[str],
-) -> dict[str, object] | None:
-    """Choose one group whose words do not collide with groups already selected."""
-    candidates = GROUP_LISTERS[mechanism]()
-    rng.shuffle(candidates)
-
-    for group in candidates:
-        group_words = {normalize_word(str(word)) for word in group["words"]}
-        label_key = normalize_word(str(group["label"]))
-
-        if len(group_words) != 4:
-            continue
-        if used_words.intersection(group_words):
-            continue
-        if label_key in used_labels:
-            continue
-
-        return group
-
-    return None
-
-
-def generate_candidate_puzzle(
-    puzzle_id: str,
-    seed: int | None = None,
-    rng: Random | None = None,
-    mechanism_plan: list[str] | None = None,
-    max_attempts: int = 50,
-) -> dict[str, object]:
-    """Generate one candidate puzzle using a simple mechanism plan."""
-    local_rng = rng if rng is not None else Random(seed)
-    plan = list(mechanism_plan) if mechanism_plan is not None else list(local_rng.choice(MECHANISM_PLANS))
-
-    for _ in range(max_attempts):
-        groups: list[dict[str, object]] = []
-        used_words: set[str] = set()
-        used_labels: set[str] = set()
-
-        for mechanism in plan:
-            group = choose_group(mechanism, local_rng, used_words, used_labels)
-
-            if group is None:
-                break
-
-            groups.append(group)
-            used_words.update(normalize_word(str(word)) for word in group["words"])
-            used_labels.add(normalize_word(str(group["label"])))
-
-        if len(groups) == 4:
-            local_rng.shuffle(groups)
-            return build_puzzle(groups, puzzle_id=puzzle_id)
-
-    raise ValueError("Could not assemble a 4-group puzzle from the current category banks.")
-
-
-def generate_candidate_puzzles(
-    count: int,
-    seed: int = 0,
-    start_index: int = 1,
-) -> list[dict[str, object]]:
-    """Generate many candidate puzzles with deterministic sampling."""
-    rng = Random(seed)
-    puzzles = []
-
-    for offset in range(count):
-        puzzle_id = f"gen_{start_index + offset:06d}"
-        puzzles.append(generate_candidate_puzzle(puzzle_id=puzzle_id, rng=rng))
-
-    return puzzles
-
-
-def choose_v2_group(
-    mechanism: str,
-    rng: Random,
-    used_words: set[str],
-    used_labels: set[str],
-) -> dict[str, object]:
-    """Choose one v2 group while enforcing distinct labels and words."""
-    builder = V2_GROUP_BUILDERS[mechanism]
-
-    if mechanism == "form":
-        subtypes = [None, "prefix", "suffix", "fill_blank", "rhyme", "homophone"]
-        rng.shuffle(subtypes)
-
-        for subtype in subtypes:
-            try:
-                group = builder(rng, used_words=used_words, subtype=subtype)
-            except ValueError:
-                continue
-
-            label_key = normalize_word(str(group["label"]))
-
-            if label_key in used_labels:
-                continue
-
-            return group
-
-        raise ValueError("Could not find a form group for the current puzzle.")
-
-    group = builder(rng, used_words=used_words)
+    used_rhyme_endings: set[str],
+) -> bool:
+    """Return True when a group can be added to the current puzzle."""
+    group_words = {normalize_word(str(word)) for word in group["words"]}
     label_key = normalize_word(str(group["label"]))
+    rhyme_ending = group.get("metadata", {}).get("rhyme_ending")
 
+    if len(group_words) != 4:
+        return False
+    if used_words.intersection(group_words):
+        return False
     if label_key in used_labels:
-        raise ValueError("Could not find a distinct label for the current puzzle.")
+        return False
+    if rhyme_ending and rhyme_ending in used_rhyme_endings:
+        return False
 
-    return group
+    return True
 
 
-def generate_candidate_puzzle_v2(
+def _pair_interference_score(left_group: dict[str, Any], right_group: dict[str, Any]) -> float:
+    """Estimate how much two groups can distract a solver from each other."""
+    left_hits = sorted(
+        (
+            max(word_group_affinity(str(left_word), right_group), pattern_match_score(str(left_word), right_group))
+            for left_word in left_group["words"]
+        ),
+        reverse=True,
+    )
+    right_hits = sorted(
+        (
+            max(word_group_affinity(str(right_word), left_group), pattern_match_score(str(right_word), left_group))
+            for right_word in right_group["words"]
+        ),
+        reverse=True,
+    )
+    cross_links = sorted(
+        (
+            max(0.0, cross_word_link_score(str(left_word), str(right_word)) - 0.12)
+            for left_word in left_group["words"]
+            for right_word in right_group["words"]
+        ),
+        reverse=True,
+    )
+
+    return sum(left_hits[:2]) + sum(right_hits[:2]) + (0.4 * sum(cross_links[:4]))
+
+
+def _pair_ambiguity_risk(left_group: dict[str, Any], right_group: dict[str, Any]) -> float:
+    """Estimate when two groups are drifting from decoy-rich to unfairly ambiguous."""
+    risk = 0.0
+
+    for left_word in left_group["words"]:
+        own_affinity = word_group_affinity(str(left_word), left_group)
+        other_affinity = word_group_affinity(str(left_word), right_group)
+
+        if other_affinity > own_affinity + 0.08:
+            risk += other_affinity - own_affinity
+
+    for right_word in right_group["words"]:
+        own_affinity = word_group_affinity(str(right_word), right_group)
+        other_affinity = word_group_affinity(str(right_word), left_group)
+
+        if other_affinity > own_affinity + 0.08:
+            risk += other_affinity - own_affinity
+
+    return risk
+
+
+def _score_candidate_addition(candidate: dict[str, Any], selected_groups: list[dict[str, Any]], rng: Random) -> float:
+    """Score how well one candidate increases cross-group interference."""
+    base_score = float(candidate["difficulty"]["score"])
+
+    if not selected_groups:
+        return base_score + (0.05 * rng.random())
+
+    interference_score = sum(_pair_interference_score(candidate, selected_group) for selected_group in selected_groups)
+    ambiguity_penalty = sum(_pair_ambiguity_risk(candidate, selected_group) for selected_group in selected_groups)
+    return interference_score - (1.15 * ambiguity_penalty) + (0.2 * base_score) + (0.05 * rng.random())
+
+
+def _weighted_pick(rng: Random, scored_candidates: list[tuple[float, dict[str, Any]]]) -> dict[str, Any]:
+    """Choose from the strongest candidates with deterministic weighted randomness."""
+    scored_candidates = sorted(scored_candidates, key=lambda item: item[0], reverse=True)
+    trimmed_candidates = scored_candidates[: max(1, min(20, len(scored_candidates)))]
+    minimum_score = trimmed_candidates[-1][0]
+    adjusted_weights = [max(score - minimum_score + 0.05, 0.05) for score, _ in trimmed_candidates]
+    cutoff = rng.random() * sum(adjusted_weights)
+    running_total = 0.0
+
+    for weight, (_, candidate) in zip(adjusted_weights, trimmed_candidates):
+        running_total += weight
+
+        if cutoff <= running_total:
+            return clone_group(candidate)
+
+    return clone_group(trimmed_candidates[-1][1])
+
+
+def _choose_group(
+    mechanism: str,
+    required_tier: str | None,
+    rng: Random,
+    selected_groups: list[dict[str, Any]],
+    used_words: set[str],
+    used_labels: set[str],
+    used_rhyme_endings: set[str],
+) -> dict[str, Any]:
+    """Choose one v4 group while prioritizing interference-rich combinations."""
+    candidates = []
+
+    for group in GROUP_LISTERS[mechanism]():
+        if required_tier is not None and group["difficulty"]["tier"] != required_tier:
+            continue
+        if not _compatible_group(group, used_words, used_labels, used_rhyme_endings):
+            continue
+
+        candidates.append(group)
+
+    if not candidates:
+        raise ValueError(f"Could not find an available {mechanism} group for tier {required_tier!r}.")
+
+    scored_candidates = [(_score_candidate_addition(group, selected_groups, rng), group) for group in candidates]
+    return _weighted_pick(rng, scored_candidates)
+
+
+def generate_candidate_puzzle_v4(
     puzzle_id: str,
     seed: int | None = None,
     rng: Random | None = None,
     mechanism_plan: list[str] | None = None,
-    max_attempts: int = 100,
+    max_attempts: int = 80,
 ) -> dict[str, object]:
-    """Generate one v2 candidate puzzle with mechanism variety controls."""
+    """Generate one v4 candidate puzzle with tier coverage and decoy constraints."""
+    # 300 attempts is too slow for interactive Streamlit generation; 80 keeps the search broad enough but responsive.
     local_rng = rng if rng is not None else Random(seed)
 
     for _ in range(max_attempts):
-        plan = list(mechanism_plan) if mechanism_plan is not None else list(local_rng.choice(V2_MECHANISM_PLANS))
-        groups: list[dict[str, object]] = []
+        plan = list(mechanism_plan) if mechanism_plan is not None else list(local_rng.choice(V4_MECHANISM_PLANS))
+        required_tiers = ["easy", "medium", "hard", None]
+        local_rng.shuffle(required_tiers)
+        groups: list[dict[str, Any]] = []
         used_words: set[str] = set()
         used_labels: set[str] = set()
+        used_rhyme_endings: set[str] = set()
 
-        for mechanism in plan:
+        for mechanism, required_tier in zip(plan, required_tiers):
             try:
-                group = choose_v2_group(mechanism, local_rng, used_words, used_labels)
+                group = _choose_group(
+                    mechanism=mechanism,
+                    required_tier=required_tier,
+                    rng=local_rng,
+                    selected_groups=groups,
+                    used_words=used_words,
+                    used_labels=used_labels,
+                    used_rhyme_endings=used_rhyme_endings,
+                )
             except ValueError:
                 groups = []
                 break
@@ -206,31 +240,58 @@ def generate_candidate_puzzle_v2(
             used_words.update(normalize_word(str(word)) for word in group["words"])
             used_labels.add(normalize_word(str(group["label"])))
 
+            rhyme_ending = group.get("metadata", {}).get("rhyme_ending")
+            if rhyme_ending:
+                used_rhyme_endings.add(str(rhyme_ending))
+
         if len(groups) != 4:
             continue
 
-        mechanism_types = {str(group["type"]) for group in groups}
+        local_rng.shuffle(groups)
+        analysis = analyze_puzzle_groups([clone_group(group) for group in groups])
 
-        if "semantic" not in mechanism_types or "theme" not in mechanism_types:
+        if not analysis["covers_all_tiers"]:
+            continue
+        if not analysis["difficulty_in_range"]:
+            continue
+        # Relax the live-generation decoy threshold so fewer good candidates are rejected before validation.
+        if analysis["decoy_group_count"] < MIN_DECOY_GROUP_COUNT:
+            continue
+        if analysis["ambiguous_words"]:
+            continue
+        if analysis["outside_form_matches"]:
+            continue
+        if analysis["singleton_words"]:
+            continue
+        if analysis["interference_score"] < MIN_INTERFERENCE_SCORE:
             continue
 
-        local_rng.shuffle(groups)
-        return build_puzzle(groups, puzzle_id=puzzle_id, source="generated_v2")
+        return build_puzzle(groups, puzzle_id=puzzle_id, seed=seed, analysis=analysis)
 
-    raise ValueError("Could not assemble a v2 puzzle from the current generator banks.")
+    raise ValueError("Could not assemble a v4 puzzle from the current generator banks.")
 
 
-def generate_candidate_puzzles_v2(
+def generate_candidate_puzzles_v4(
     count: int,
     seed: int = 0,
     start_index: int = 1,
 ) -> list[dict[str, object]]:
-    """Generate many v2 candidate puzzles with deterministic sampling."""
+    """Generate many v4 candidate puzzles with deterministic sampling."""
     rng = Random(seed)
     puzzles = []
 
     for offset in range(count):
-        puzzle_id = f"gen_v2_{start_index + offset:06d}"
-        puzzles.append(generate_candidate_puzzle_v2(puzzle_id=puzzle_id, rng=rng))
+        puzzle_id = f"gen_v4_{start_index + offset:06d}"
+        puzzles.append(generate_candidate_puzzle_v4(puzzle_id=puzzle_id, rng=rng, seed=seed))
 
     return puzzles
+
+
+def generate_candidate_puzzle_v2(*args: Any, **kwargs: Any) -> dict[str, object]:
+    """Compatibility wrapper for older imports."""
+    return generate_candidate_puzzle_v4(*args, **kwargs)
+
+
+def generate_candidate_puzzles_v2(*args: Any, **kwargs: Any) -> list[dict[str, object]]:
+    """Compatibility wrapper for older imports."""
+    return generate_candidate_puzzles_v4(*args, **kwargs)

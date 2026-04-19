@@ -1,0 +1,57 @@
+{
+  "seed": 561,
+  "official_puzzle_count": 652,
+  "dataset_mechanism_counts": {
+    "semantic": 2131,
+    "form": 339,
+    "theme": 138
+  },
+  "candidate_budget": 30,
+  "target_accepted_count": 10,
+  "total_candidates_generated": 19,
+  "accepted_count": 10,
+  "acceptance_rate": 0.5263157894736842,
+  "target_met": true,
+  "rejected_by_structure": 0,
+  "rejected_by_style": 0,
+  "rejected_by_ambiguity": 0,
+  "rejected_by_difficulty": 0,
+  "rejected_by_singleton": 0,
+  "rejected_by_duplicate": 0,
+  "rejected_by_multi_solution": 0,
+  "rejected_by_low_cohesion": 0,
+  "rejected_by_high_confusion": 9,
+  "rejected_by_internal_repeat": 0,
+  "rejected_by_generation_error": 0,
+  "candidate_group_type_counts": {
+    "theme": 22,
+    "form": 26,
+    "semantic": 28
+  },
+  "accepted_group_type_counts": {
+    "theme": 12,
+    "form": 15,
+    "semantic": 13
+  },
+  "average_within_group_similarity": 0.32278955354735217,
+  "average_cross_group_similarity": 0.21477970564027285,
+  "average_solution_count": 1.0,
+  "average_puzzle_difficulty": 0.5879880526262521,
+  "average_interference_score": 15.645377392222096,
+  "top_structure_reasons": {},
+  "top_style_reasons": {},
+  "top_ambiguity_reasons": {},
+  "top_difficulty_reasons": {},
+  "top_singleton_reasons": {},
+  "top_duplicate_reasons": {},
+  "top_multi_solution_reasons": {},
+  "top_low_cohesion_reasons": {},
+  "top_high_confusion_reasons": {
+    "average cross-group similarity (0.301) is above the threshold (0.280)": 2,
+    "average cross-group similarity (0.401) is above the threshold (0.280)": 1,
+    "average cross-group similarity (0.288) is above the threshold (0.280)": 1,
+    "average cross-group similarity (0.304) is above the threshold (0.280)": 1,
+    "average cross-group similarity (0.362) is above the threshold (0.280)": 1
+  },
+  "top_generation_errors": {}
+}

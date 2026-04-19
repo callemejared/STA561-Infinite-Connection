@@ -3,3 +3,6 @@
 # pandas
 # jupyter
 streamlit
+nltk
+numpy
+pronouncing
