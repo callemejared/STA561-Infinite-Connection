@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-The Infinite Connections project is a generator for puzzles similar to the New York Times *Connections* puzzle. The goal of the project is to automatically construct puzzles containing four groups of four words each, where each group has a clear thematic, semantic, or formal relationship, while also ensuring that the puzzle has a certain level of difficulty and misleadingness. The design of the project has gone through multiple iterative versions (v1-v6), developing from an initial proof of concept into the final submission version, and provides a complete toolchain for data loading, puzzle generation, batch production, validation, and visualization. In the current `codex/v6-final` branch, the code is based on the low-cost batch generator from v5 and uses independently authored semantic/theme/form/anagram banks, while ensuring that these banks do not overlap with the official New York Times puzzle bank.
+The Infinite Connections project is a generator for puzzles similar to the New York Times *Connections* puzzle. The goal of the project is to automatically construct puzzles containing four groups of four words each, where each group has a clear thematic, semantic, or formal relationship, while also ensuring that the puzzle has a certain level of difficulty and misleadingness. The design of the project has gone through multiple iterative versions (v1-v6), developing from an initial proof of concept into the final submission version, and provides a complete toolchain for data loading, puzzle generation, batch production, validation, and visualization. In the current `main` branch, the code is based on the low-cost batch generator from v5 and uses independently authored semantic/theme/form/anagram banks, while ensuring that these banks do not overlap with the official New York Times puzzle bank.
 
 This repository contains three complementary workflows: the v4 high-quality pipeline, the v5 large-scale low-cost pipeline, and the v6 final submission pipeline, where the v6 branch introduces original banks and strict independence checks while ensuring generation speed.
 
@@ -252,7 +252,7 @@ These checks are mandatory in v4, while in v5/v6 they are more often used for ev
 
 ## Repository Structure and Main Files
 
-The project's code is distributed across the `data/`, `docs/`, and `src/` directories, among which the `src/` directory contains the main generation logic. According to the current `codex/v6-final` branch, the key added or modified files include:
+The project's code is distributed across the `data/`, `docs/`, and `src/` directories, among which the `src/` directory contains the main generation logic. According to the current `main` branch, the key added or modified files include:
 
 | Version | Added/Modified Files | Function Summary |
 | --- | --- | --- |
@@ -290,7 +290,7 @@ project_root/
 
 ### Environment Setup
 
-Clone the repository and switch to the `codex/v6-final` branch.
+Clone the repository and use the `main` branch.
 
 Install dependencies:
 
@@ -346,7 +346,7 @@ Use the following command to start the web application:
 streamlit run src/app/app.py
 ```
 
-In the `codex/v6-final` branch, the default homepage is the Evaluation page, which is used to generate and review puzzle libraries; the Play page in the sidebar provides the final player interface, where puzzles can be generated with one click and played.
+In the `main` branch, the default homepage is the Play page, and the sidebar also exposes the Evaluation page for generating and reviewing puzzle libraries.
 
 ### Common Issues and Tips
 
