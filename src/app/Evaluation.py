@@ -27,7 +27,11 @@ REPORT_V6_FINAL_PATH = PROJECT_ROOT / "data" / "generated" / "generation_report_
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from generators.puzzle_generator_v6 import generate_puzzles_v6_with_progress, initialize_v6_runtime
+from generators.puzzle_generator_v6 import (
+    clear_v6_runtime_caches,
+    generate_puzzles_v6_with_progress,
+    initialize_v6_runtime,
+)
 
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 NON_THEME_FRAME = "NOT_THEME"
@@ -252,8 +256,8 @@ if generate_clicked:
         runtime_start = perf_counter()
         status_box.info("Phase 1/2: building the final runtime and compatibility graph...")
         # Evaluation is meant to reflect a fresh end-to-end batch run on every
-        # click, so we clear the memoized runtime before rebuilding it here.
-        initialize_v6_runtime.cache_clear()
+        # click, so we clear the layered v6 caches before rebuilding here.
+        clear_v6_runtime_caches()
         runtime = initialize_v6_runtime()
         runtime_seconds = perf_counter() - runtime_start
         progress_bar.progress(0.12, text="Runtime ready. Starting batch generation...")

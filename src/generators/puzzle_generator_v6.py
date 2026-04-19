@@ -20,11 +20,28 @@ from typing import Any, Callable, Iterable
 
 from generators.anagram_generator import list_independent_anagram_groups_v6
 from generators.form_generator import list_independent_form_groups_v6
+from generators.form_generator import build_homophone_groups, build_rhyme_groups
 from generators.generator_resources import (
     clone_group,
     detect_form_pattern_value,
     detect_form_subtype,
+    label_wordnet_depth,
+    load_independent_anagram_bank,
+    load_independent_form_bank,
+    load_independent_semantic_bank,
+    load_independent_theme_bank,
+    load_official_stats_safe,
+    load_word_frequency,
+    load_word_pool,
+    load_word_pool_keys,
+    load_word_pool_size,
     normalize_word_key,
+    official_bank_signatures,
+    official_semantic_signatures,
+    pronunciation_list,
+    pronouncing_available,
+    rhyme_ending,
+    wordnet_available,
 )
 from generators.semantic_generator import list_independent_semantic_groups_v6
 from generators.theme_generator import list_independent_theme_groups_v6
@@ -54,6 +71,37 @@ PROGRESS_UPDATE_INTERVAL = 100
 MAX_SEMANTIC_GROUPS_PER_PUZZLE = 1
 MAX_THEME_GROUPS_PER_PUZZLE = 2
 MAX_FORM_LIKE_GROUPS_PER_PUZZLE = 2
+
+
+def clear_v6_runtime_caches() -> None:
+    """Clear the layered caches that make v6 warm starts extremely fast.
+
+    The Evaluation app uses this helper before batch generation so its reported
+    runtime-build number reflects a closer-to-cold initialization instead of a
+    warm in-process rebuild. Play intentionally does not call this helper.
+    """
+    initialize_v6_runtime.cache_clear()
+    list_independent_semantic_groups_v6.cache_clear()
+    list_independent_theme_groups_v6.cache_clear()
+    list_independent_form_groups_v6.cache_clear()
+    build_rhyme_groups.cache_clear()
+    build_homophone_groups.cache_clear()
+    load_official_stats_safe.cache_clear()
+    load_independent_semantic_bank.cache_clear()
+    load_independent_theme_bank.cache_clear()
+    load_independent_form_bank.cache_clear()
+    load_independent_anagram_bank.cache_clear()
+    official_semantic_signatures.cache_clear()
+    official_bank_signatures.cache_clear()
+    load_word_pool.cache_clear()
+    load_word_frequency.cache_clear()
+    load_word_pool_keys.cache_clear()
+    load_word_pool_size.cache_clear()
+    wordnet_available.cache_clear()
+    pronouncing_available.cache_clear()
+    pronunciation_list.cache_clear()
+    rhyme_ending.cache_clear()
+    label_wordnet_depth.cache_clear()
 
 
 def mechanism_family_for_group(group: dict[str, Any]) -> str:
