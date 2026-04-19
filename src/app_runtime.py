@@ -1,4 +1,4 @@
-"""Runtime helpers for live-generated Infinite Connections v4 puzzles."""
+"""Runtime helpers for live-generated Infinite Connections v5 puzzles."""
 
 from __future__ import annotations
 
@@ -16,11 +16,12 @@ from generators.theme_generator import list_theme_groups
 from validators.duplicate_check import canonicalize_puzzle
 from validators.puzzle_validators import ValidationConfig, first_failure_stage, known_group_lookup, validate_puzzle
 
-DEFAULT_LIVE_ATTEMPT_BUDGET = 24
+# Keep one button click from triggering an overly long blocking search in Streamlit live generation.
+DEFAULT_LIVE_ATTEMPT_BUDGET = 6
 
 
 def initialize_v4_runtime() -> dict[str, Any]:
-    """Warm the heavy resources needed for live v4 generation exactly once."""
+    """Warm the heavy resources needed for live v5 generation exactly once."""
     warmup: dict[str, float | int | str] = {}
     total_start = perf_counter()
 
@@ -65,14 +66,14 @@ def generate_validated_live_puzzle(
     seen_puzzle_keys: set[tuple[tuple[str, ...], ...]] | None = None,
     max_candidates: int = DEFAULT_LIVE_ATTEMPT_BUDGET,
 ) -> dict[str, Any]:
-    """Generate and validate one fresh v4 puzzle using warmed resources."""
+    """Generate and validate one fresh v5 puzzle using warmed resources."""
     rng = Random(seed)
     rejection_counts: Counter[str] = Counter()
     seen_keys = seen_puzzle_keys or set()
     total_start = perf_counter()
 
     for candidate_index in range(1, max_candidates + 1):
-        puzzle_id = f"live_v4_{puzzle_index:06d}_{candidate_index:02d}"
+        puzzle_id = f"live_v5_{puzzle_index:06d}_{candidate_index:02d}"
 
         try:
             candidate_puzzle = generate_candidate_puzzle_v4(
@@ -80,7 +81,7 @@ def generate_validated_live_puzzle(
                 rng=rng,
                 seed=seed,
             )
-        except ValueError as exc:
+        except ValueError:
             rejection_counts["generation_error"] += 1
             continue
 
@@ -116,6 +117,6 @@ def generate_validated_live_puzzle(
         }
 
     raise ValueError(
-        f"Could not generate a fully validated v4 puzzle within {max_candidates} live attempts. "
+        f"Could not generate a fully validated v5 puzzle within {max_candidates} live attempts. "
         "Try again with a new seed or raise the attempt budget."
     )

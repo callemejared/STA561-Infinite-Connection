@@ -7,6 +7,7 @@ from typing import Any
 
 from generators.form_generator import list_form_groups
 from generators.puzzle_analysis import (
+    MIN_DECOY_GROUP_COUNT,
     MIN_INTERFERENCE_SCORE,
     analyze_puzzle_groups,
     cross_word_link_score,
@@ -205,9 +206,10 @@ def generate_candidate_puzzle_v4(
     seed: int | None = None,
     rng: Random | None = None,
     mechanism_plan: list[str] | None = None,
-    max_attempts: int = 300,
+    max_attempts: int = 80,
 ) -> dict[str, object]:
     """Generate one v4 candidate puzzle with tier coverage and decoy constraints."""
+    # 300 attempts is too slow for interactive Streamlit generation; 80 keeps the search broad enough but responsive.
     local_rng = rng if rng is not None else Random(seed)
 
     for _ in range(max_attempts):
@@ -252,7 +254,8 @@ def generate_candidate_puzzle_v4(
             continue
         if not analysis["difficulty_in_range"]:
             continue
-        if analysis["decoy_group_count"] < 4:
+        # Relax the live-generation decoy threshold so fewer good candidates are rejected before validation.
+        if analysis["decoy_group_count"] < MIN_DECOY_GROUP_COUNT:
             continue
         if analysis["ambiguous_words"]:
             continue
