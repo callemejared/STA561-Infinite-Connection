@@ -4,13 +4,31 @@
 
 This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
 
-The active workflow is now the **v4** pipeline. It keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
+The repository now contains **two complementary workflows**:
+
+- **v4**: a higher-cost, validator-heavy pipeline for carefully filtered single puzzles
+- **v5**: a lower-cost, batch-oriented pipeline designed to generate large libraries quickly and support both reviewer and player-facing Streamlit interfaces
+
+The v4 pipeline keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
 
 - stronger difficulty calibration,
 - deliberate but controlled misleadingness,
 - phoneme-level rhyme handling,
 - earlier rejection of trivial form groups,
 - and unified v4 naming for generation functions and outputs.
+
+The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator.
+
+## v5 Progress Update
+
+Compared with v4, the current `codex-sta561-v5` branch adds four major pieces of progress:
+
+- a **low-cost batch generator** that builds many structurally sound puzzles without relying on repeated heavy generate-and-reject loops,
+- a **compatibility-graph-based sampling path** that directly encodes cheap hard constraints such as word overlap, mechanism-family duplication, rhyme-ending reuse, and theme-frame reuse,
+- a **batch review dashboard** where instructors can generate 10K puzzles with a visible progress bar, then sample and inspect puzzles by ID,
+- and a separate **player-facing game page** that presents one-click puzzle generation, shuffle/submit/deselect interactions, mistake tracking, solved-group colors, and end-of-game sharing.
+
+v4 remains useful as the stricter reference pipeline; v5 focuses on throughput, maintainability, and practical evaluation at scale.
 
 ## v4 Architecture
 
@@ -238,6 +256,50 @@ Useful flags:
 
 The `--seed` argument controls the v4 sampling order, so rerunning with the same seed and the same resource state produces reproducible candidate selection behavior.
 
+## v5 Architecture
+
+The v5 pipeline is intentionally different from v4. Instead of repeatedly assembling a candidate, running heavy ambiguity analysis, and rejecting most attempts, v5 moves the expensive work into one-time preprocessing and keeps the per-puzzle sampling path cheap.
+
+Main v5 modules:
+
+1. `src/generators/puzzle_generator_v5.py`
+   Loads the semantic/theme/form/anagram banks once, normalizes them into reusable group records, assigns `mechanism_family` and `theme_frame_family`, and builds a lightweight compatibility graph. Puzzle generation then samples four mutually compatible groups directly from that graph.
+2. `src/batch_generate_v5.py`
+   Batch-generates `generated_v5.json` and `generation_report_v5.json`, with defaults oriented toward the 10K-puzzle audit workflow.
+3. `src/app/app.py`
+   Now acts as the **v5 batch reviewer dashboard** on this branch. It can generate a large v5 library on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
+4. `src/app/pages/Play_v5.py`
+   Provides a separate **player-facing** Streamlit page. It presents a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary without changing the underlying v5 generator.
+5. `src/app/v5_game_logic.py`
+   Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
+
+### v5 Hard Constraints
+
+v5 still enforces cheap but important structural constraints during compatibility-graph construction:
+
+- no word overlap between groups,
+- no duplicate normalized labels,
+- no repeated rhyme ending,
+- no repeated form-like `mechanism_family`,
+- and no repeated theme `theme_frame_family`.
+
+This means one puzzle will not contain two rhyme groups with the same mechanism role, or two theme groups that both use the same broad frame such as `AT ...` or `WORDS AFTER ...`.
+
+### v5 Outputs
+
+Default v5 outputs:
+
+- `data/generated/generated_v5.json`
+- `data/generated/generation_report_v5.json`
+
+Example:
+
+```bash
+python src/batch_generate_v5.py --count 10000 --seed 561
+```
+
+The report includes lightweight batch statistics such as runtime build time, generation time, throughput, mechanism-family counts, theme-frame counts, and difficulty-tier counts.
+
 ## Streamlit App
 
 Launch the app with:
@@ -246,12 +308,24 @@ Launch the app with:
 streamlit run src/app/app.py
 ```
 
-The app can:
+On the `codex-sta561-v5` branch, the default Streamlit entrypoint is now the **v5 batch reviewer dashboard**. It can:
 
-- generate a fresh validated v4 puzzle,
-- load a puzzle from `accepted_v4.json`,
-- reveal answers with group types,
-- and show the stored puzzle-level difficulty summary.
+- generate a large v5 library directly from the app,
+- show progress during runtime build and batch generation,
+- save `generated_v5.json` and `generation_report_v5.json`,
+- sample puzzles by ID for manual review,
+- and display the full answer set plus cheap metadata for each sampled puzzle.
+
+This branch also includes a separate **Play v5** page under Streamlit's multipage navigation. The player page can:
+
+- generate a fresh playable v5 puzzle,
+- show a 4x4 clickable tile grid,
+- support `Shuffle`, `Submit`, and `Deselect All`,
+- track `Mistakes Remaining`,
+- reveal solved groups in yellow/green/blue/purple order,
+- and show a simple share string after the game ends.
+
+The underlying v4 generation and validation modules are still present in the repository, but the default app flow on this branch is centered on v5 generation/review/play rather than the older v4 live-generator page.
 
 ## How To Run
 
@@ -273,11 +347,32 @@ Generate a v4 library:
 python src/batch_generate_and_score.py --target-accepted 100 --num-candidates 250 --seed 561
 ```
 
+Generate a v5 library:
+
+```bash
+python src/batch_generate_v5.py --count 10000 --seed 561
+```
+
 Start Streamlit:
 
 ```bash
 streamlit run src/app/app.py
 ```
+
+After Streamlit starts on the v5 branch:
+
+- the main page is the **v5 batch reviewer**,
+- and the sidebar/page navigation exposes **Play v5** as the player-facing interface.
+
+## v4 vs v5
+
+Main differences from v4:
+
+- v4 is optimized for carefully filtered single-puzzle acceptance; v5 is optimized for generating large libraries quickly.
+- v4 keeps heavy validator-driven checks such as backtracking-based uniqueness and richer ambiguity/confusion analysis in the main path; v5 removes those expensive steps from its primary batch-generation loop.
+- v4 assembles candidates and rejects many of them; v5 preprocesses group metadata once, builds a compatibility graph, and samples directly from compatible group neighborhoods.
+- v4's default app on earlier branches focused on live generation of one puzzle at a time; v5's default app now focuses on batch generation plus manual review, with a separate player-facing page layered on top.
+- v4 is better for demonstrating the stricter puzzle-quality pipeline; v5 is better for the competition workflow of generating 10K puzzles and auditing a random subset.
 
 ## v3 vs v4
 
@@ -313,6 +408,17 @@ Modified under `src/`:
 Related non-`src/` resource added:
 
 - `data/raw/form_pattern_blacklist.txt`
+
+Additional v5 files added under `src/`:
+
+- `src/generators/puzzle_generator_v5.py`
+- `src/batch_generate_v5.py`
+- `src/app/v5_game_logic.py`
+- `src/app/pages/Play_v5.py`
+
+Additional v5 files modified under `src/`:
+
+- `src/app/app.py`
 
 ## Repository Structure
 
