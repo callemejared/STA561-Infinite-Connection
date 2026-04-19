@@ -35,59 +35,6 @@ def group_words_available(group: dict[str, object], used_words: set[str] | None)
     return not used_words.intersection(normalize_word_key(word) for word in group["words"])
 
 
-def _build_surface_pattern_groups(pattern_kind: str, length: int) -> list[dict[str, object]]:
-    """Create shared-prefix or shared-suffix groups from the word pool."""
-    buckets: dict[str, list[str]] = defaultdict(list)
-
-    for word in alpha_word_pool(min_length=max(length + 2, 4)):
-        key = normalize_word_key(word)
-        pattern_value = key[:length] if pattern_kind == "prefix" else key[-length:]
-        buckets[pattern_value].append(str(word).upper())
-
-    groups: list[dict[str, object]] = []
-
-    for pattern_value, words in sorted(buckets.items()):
-        unique_words = sorted(set(words))
-
-        if len(unique_words) < 4 or len(unique_words) > 10:
-            continue
-
-        coverage = pattern_coverage_ratio(pattern_kind, pattern_value)
-
-        if coverage > FORM_PATTERN_COVERAGE_LIMIT or form_pattern_blacklisted(pattern_value):
-            continue
-
-        label = f"Starts with {pattern_value}" if pattern_kind == "prefix" else f"Ends with {pattern_value}"
-        group_words = unique_words[:4]
-        groups.append(
-            {
-                "label": label,
-                "type": "form",
-                "words": group_words,
-                "metadata": {
-                    "subtype": pattern_kind,
-                    "pattern_value": pattern_value,
-                    "pattern_match_count": count_words_matching_pattern(pattern_kind, pattern_value),
-                    "pattern_coverage": coverage,
-                },
-            }
-        )
-
-    return groups
-
-
-@lru_cache(maxsize=1)
-def build_prefix_groups() -> tuple[dict[str, object], ...]:
-    """Create dynamic shared-prefix groups from the reusable word pool."""
-    return tuple(_build_surface_pattern_groups(pattern_kind="prefix", length=3))
-
-
-@lru_cache(maxsize=1)
-def build_suffix_groups() -> tuple[dict[str, object], ...]:
-    """Create dynamic shared-suffix groups from the reusable word pool."""
-    return tuple(_build_surface_pattern_groups(pattern_kind="suffix", length=3))
-
-
 @lru_cache(maxsize=1)
 def build_rhyme_groups() -> tuple[dict[str, object], ...]:
     """Create pronunciation-based rhyme groups using CMU phoneme endings."""
@@ -214,6 +161,9 @@ def _is_valid_form_group(group: dict[str, object]) -> bool:
     subtype = str(group.get("metadata", {}).get("subtype") or detect_form_subtype(group))
     pattern_value = group.get("metadata", {}).get("pattern_value") or detect_form_pattern_value(group)
 
+    if subtype in {"prefix", "suffix"}:
+        return False
+
     if subtype in {"prefix", "suffix", "rhyme", "homophone"}:
         if form_pattern_blacklisted(str(pattern_value) if pattern_value is not None else None):
             return False
@@ -229,10 +179,8 @@ def _is_valid_form_group(group: dict[str, object]) -> bool:
 
 @lru_cache(maxsize=1)
 def list_form_groups() -> list[dict[str, object]]:
-    """Return all v4 form groups, including dynamic prefix/suffix/rhyme/homophone patterns."""
+    """Return all v4 form groups, excluding trivial prefix/suffix surface patterns."""
     groups: list[dict[str, object]] = [_annotate_existing_form_group(group) for group in load_form_bank()]
-    groups.extend(clone_group(group) for group in build_prefix_groups())
-    groups.extend(clone_group(group) for group in build_suffix_groups())
     groups.extend(clone_group(group) for group in build_rhyme_groups())
     groups.extend(clone_group(group) for group in build_homophone_groups())
 
