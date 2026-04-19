@@ -186,30 +186,40 @@ if library_mode == "By index":
 
 st.title("Infinite Connections v4")
 st.caption("A data-driven NYT-style generator with v4 difficulty balancing and decoy-aware assembly.")
+st.caption("`Generate New Puzzle` loads a saved v4 puzzle instantly. `Generate Live Puzzle (Slow)` runs the full assembler and validator and can take 1-3 minutes.")
 
 control_columns = st.columns(3)
 
 if control_columns[0].button("Generate New Puzzle", use_container_width=True):
-    try:
-        puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
-        store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
-    except RuntimeError:
-        fallback_puzzle = load_library_puzzle(st.session_state["board_seed"], "Random", None)
-
-        if fallback_puzzle is None:
-            st.error("Could not generate a live puzzle and no saved v4 library is available.")
-        else:
-            st.warning("Live generation was unavailable, so a saved library puzzle was loaded instead.")
-            store_puzzle_in_state(fallback_puzzle, st.session_state["board_seed"], "Library fallback")
-
-if control_columns[1].button("Load from Library", use_container_width=True):
     puzzle = load_library_puzzle(st.session_state["board_seed"], library_mode, library_index)
 
     if puzzle is None:
-        st.warning("No saved `accepted_v4.json` library was found yet.")
+        st.warning("No saved `accepted_v4.json` library was found yet, so the app is trying live generation instead.")
+
+        with st.spinner("Generating a live v4 puzzle. This can take 1-3 minutes on Streamlit Community Cloud."):
+            try:
+                puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
+            except RuntimeError:
+                st.error("Could not generate a live puzzle and no saved v4 library is available.")
+            else:
+                store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
     else:
-        source_label = f"Library puzzle ({library_mode.lower()})"
+        source_label = f"Library puzzle ({library_mode.lower()}, fast)"
         store_puzzle_in_state(puzzle, st.session_state["board_seed"], source_label)
+
+if control_columns[1].button("Generate Live Puzzle (Slow)", use_container_width=True):
+    with st.spinner("Generating a live v4 puzzle. This runs the full v4 assembler and validator and can take 1-3 minutes."):
+        try:
+            puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
+            store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
+        except RuntimeError:
+            fallback_puzzle = load_library_puzzle(st.session_state["board_seed"], "Random", None)
+
+            if fallback_puzzle is None:
+                st.error("Could not generate a live puzzle and no saved v4 library is available.")
+            else:
+                st.warning("Live generation timed out, so a saved library puzzle was loaded instead.")
+                store_puzzle_in_state(fallback_puzzle, st.session_state["board_seed"], "Library fallback")
 
 if control_columns[2].button("Reveal Answers", use_container_width=True):
     st.session_state["show_answer"] = True
