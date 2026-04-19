@@ -1,4 +1,4 @@
-"""Streamlit UI for browsing a pre-generated Infinite Connections v4 library."""
+﻿"""Streamlit UI for browsing a pre-generated Infinite Connections v4 library."""
 
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ def render_board(words: list[str]) -> None:
 def render_answer(groups: list[dict[str, Any]]) -> None:
     """Render the solved groups with NYT-style colors."""
     for color, group in zip(ANSWER_COLORS, groups):
-        words = " · ".join(str(word) for word in group["words"])
+        words = " - ".join(str(word) for word in group["words"])
         column_label = group.get("label", "")
         column_type = group.get("type", "")
         st.markdown(
