@@ -23,6 +23,7 @@ from final_game_logic import (
     solved_groups_in_order,
     submit_guess,
     toggle_word_selection,
+    unsolved_groups,
 )
 
 DEFAULT_SEED = 561
@@ -46,7 +47,7 @@ def start_new_game() -> None:
     """Generate a fresh final puzzle and reset the current play session."""
     seed = int(st.session_state["play_seed"])
 
-    with st.spinner("Generating a fresh puzzle..."):
+    with st.spinner("Generating a fresh final puzzle..."):
         st.session_state["play_game"] = generate_final_game(seed)
 
     st.session_state["play_seed"] = seed + 1
@@ -357,8 +358,25 @@ st.markdown(
     .stButton > button:hover {
         border-color: rgba(95, 82, 60, 0.28);
         box-shadow: 0 12px 22px rgba(78, 68, 52, 0.08);
+        transform: translateY(-1px);
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(180deg, #2d384d 0%, #232c3f 100%);
+        border-color: #232c3f;
+        color: #f9f6ee;
+    }
+    .stButton > button[kind="primary"]:hover {
+        border-color: #232c3f;
+        box-shadow: 0 14px 24px rgba(34, 46, 69, 0.24);
+    }
+    .stCodeBlock {
+        border-radius: 18px;
+        overflow: hidden;
     }
     @media (max-width: 768px) {
+        .hero-title {
+            font-size: 1.95rem;
+        }
         .status-strip {
             grid-template-columns: 1fr;
         }
@@ -370,70 +388,73 @@ st.markdown(
 
 ensure_session_defaults()
 
-if st.session_state["play_game"] is None:
-    start_new_game()
-
-game_state = st.session_state["play_game"]
-
 st.markdown(
     """
     <div class="hero-shell">
       <div class="hero-band">
-        <div class="hero-title">Infinite Connections</div>
+        <div class="hero-title">Infinite Connections Final</div>
       </div>
       <div class="hero-copy">
-        A polished player-facing build of the final puzzle generator. Create a fresh board,
-        shuffle the unresolved tiles, and solve all four groups before you run out of mistakes.
+        Sort sixteen words into four hidden groups. The easiest category appears first in yellow, then green, blue,
+        and purple. Shuffle the board, submit a set of four, and see how cleanly you can solve the final build.
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-mistakes_remaining = int(game_state["mistakes_remaining"])
-solved_count = len(game_state["solved_group_ids"])
-selected_count = len(game_state["selected_words"])
+control_columns = st.columns([1.35, 1, 1, 1], vertical_alignment="center")
 
-st.markdown(
-    (
-        "<div class='status-strip'>"
-        "<div class='status-card'><div class='status-kicker'>Mistakes Remaining</div>"
-        f"<div class='status-value'>{mistakes_remaining}/{MISTAKE_LIMIT}</div></div>"
-        "<div class='status-card'><div class='status-kicker'>Groups Solved</div>"
-        f"<div class='status-value'>{solved_count}/4</div></div>"
-        "<div class='status-card'><div class='status-kicker'>Selected</div>"
-        f"<div class='status-value'>{selected_count}/4</div></div>"
-        "</div>"
-    ),
-    unsafe_allow_html=True,
-)
-
-action_columns = st.columns(4)
-
-if action_columns[0].button("Generate New Puzzle", use_container_width=True):
+if control_columns[0].button("Generate New Puzzle", use_container_width=True, type="primary"):
     start_new_game()
     st.rerun()
 
-if action_columns[1].button("Shuffle", use_container_width=True, disabled=bool(game_state["game_over"])):
+game_state = st.session_state.get("play_game")
+
+if game_state is None:
+    st.info("Click `Generate New Puzzle` to start a game.")
+    st.stop()
+
+if control_columns[1].button("Shuffle", use_container_width=True, disabled=bool(game_state["game_over"])):
     shuffle_board(game_state)
     st.rerun()
 
-if action_columns[2].button("Submit", use_container_width=True, disabled=bool(game_state["game_over"])):
+if control_columns[2].button("Deselect All", use_container_width=True, disabled=not bool(game_state["selected_words"])):
+    deselect_all(game_state)
+    st.rerun()
+
+if control_columns[3].button("Submit", use_container_width=True, disabled=bool(game_state["game_over"]), type="primary"):
     submit_guess(game_state)
     st.rerun()
 
-if action_columns[3].button(
-    "Deselect All",
-    use_container_width=True,
-    disabled=bool(game_state["game_over"]) or not bool(game_state["selected_words"]),
-):
-    deselect_all(game_state)
-    st.rerun()
+solved_count = len(game_state["solved_group_ids"])
+
+st.markdown(
+    f"""
+    <div class="status-strip">
+      <div class="status-card">
+        <div class="status-kicker">Selected</div>
+        <div class="status-value">{len(game_state["selected_words"])}/4</div>
+      </div>
+      <div class="status-card">
+        <div class="status-kicker">Groups Solved</div>
+        <div class="status-value">{solved_count}/4</div>
+      </div>
+      <div class="status-card">
+        <div class="status-kicker">Mistakes Remaining</div>
+        <div class="status-value">{game_state["mistakes_remaining"]}/{MISTAKE_LIMIT}</div>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 render_feedback(game_state.get("feedback"))
 render_solved_groups(game_state)
 
-if not game_state["game_over"]:
+remaining_groups = unsolved_groups(game_state)
+
+if remaining_groups and not game_state["game_over"]:
     render_tile_grid(game_state)
 
 render_game_end(game_state)
