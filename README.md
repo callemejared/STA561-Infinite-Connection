@@ -73,7 +73,7 @@ The v4 pipeline still follows the same high-level flow:
 8. `src/batch_generate_and_score.py`
    Batch-generates accepted puzzles into `accepted_v4.json` with a corresponding `generation_report_v4.json`.
 9. `src/app/app.py`
-   Loads `accepted_v4.json` or generates a fresh v4 puzzle in Streamlit.
+   Compatibility Streamlit entrypoint that forwards to the main dashboard module.
 
 ## Data Loading And Resources
 
@@ -288,7 +288,7 @@ Main v5 modules:
    Loads the semantic/theme/form/anagram banks once, normalizes them into reusable group records, assigns `mechanism_family` and `theme_frame_family`, and builds a lightweight compatibility graph. Puzzle generation then samples four mutually compatible groups directly from that graph.
 2. `src/batch_generate_v5.py`
    Batch-generates `generated_v5.json` and `generation_report_v5.json`, with defaults oriented toward the 10K-puzzle audit workflow.
-3. `src/app/app.py`
+3. `src/app/Evaluation.py`
    Established the reviewer-dashboard pattern that the final branch still uses: generate a large batch on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
 4. `src/app/pages/Play.py`
    The final branch's player-facing page inherits the same v5 interaction model: a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary layered on top of the cheap generator.
@@ -332,7 +332,7 @@ Main v6 final modules:
    Uses the same low-cost compatibility-graph approach as v5, but swaps in independent semantic/theme/form/anagram inputs for the final branch, blocks curated-bank overlap with official NYT groups, and applies practical diversity caps to keep 10K-scale generation cheap.
 2. `src/batch_generate_v6.py`
    Batch-generates `generated_v6_final.json` and `generation_report_v6_final.json`, with defaults aimed at the final submission workflow.
-3. `src/app/app.py`
+3. `src/app/Evaluation.py`
    Acts as the **final batch reviewer dashboard** on this branch. It can generate the final library on demand, show progress during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
 4. `src/app/pages/Play.py`
    Provides the separate **player-facing final page** with one-click puzzle generation, shuffle/submit/deselect controls, mistake tracking, solved-group colors, and share text.
@@ -494,6 +494,7 @@ Modified under `src/`:
 - `src/validators/puzzle_validators.py`
 - `src/batch_generate_and_score.py`
 - `src/app/app.py`
+- `src/app/Evaluation.py`
 
 Related non-`src/` resource added:
 
@@ -506,7 +507,8 @@ Additional v5 files added under `src/`:
 
 Additional v5 files modified under `src/`:
 
-- `src/app/app.py`
+- `src/app/app.py` (compatibility entrypoint)
+- `src/app/Evaluation.py`
 
 Additional v6 final files added under `src/`:
 
