@@ -156,6 +156,12 @@ In v4, rhyme generation works like this:
 
 The assembler also forbids two rhyme groups with the same phoneme ending from appearing in one puzzle.
 
+## Q&A: Visual Rhyme-Tail Overlap
+
+**Q:** Why add a visual rhyme-tail overlap check if v4 already uses CMU phoneme endings for rhyme validation?
+
+**A:** Phoneme-level rhyme checking correctly separates words that look similar but do not actually rhyme, such as `HAD` and `WAD`. However, those words can still feel misleadingly close in a puzzle because they share a strong visible tail like `-AD`. To avoid low-quality overlap, v4 now adds a second safeguard on top of the CMU-based rhyme logic: after a rhyme group is built, the pipeline checks whether words from other groups visually match the target-centered spelling tail of that rhyme family. If an outside word overlaps too strongly, the candidate puzzle is rejected as ambiguous. This keeps phoneme-based rhyme generation intact while preventing cases where a non-rhyming word still looks like it belongs to the rhyme group.
+
 ## Puzzle Assembly
 
 `src/generators/puzzle_assembler.py` now exposes:
@@ -194,6 +200,7 @@ That makes the final puzzles more misleading than v3, but still keeps them playa
 - difficulty-tier coverage and puzzle difficulty range,
 - decoy presence for all four groups,
 - label-based ambiguity using embedding similarity,
+- visual rhyme-tail overlap for non-rhyming but visibly similar outside words,
 - singleton-word rejection,
 - and updated high-confusion tolerance consistent with the new decoy-aware design.
 
