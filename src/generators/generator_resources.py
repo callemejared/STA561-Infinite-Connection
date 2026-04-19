@@ -1,4 +1,4 @@
-"""Shared resource helpers for the v4 puzzle generators."""
+"""Shared resource helpers for the v4-v6 puzzle generators."""
 
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ CURATED_THEME_GROUPS: list[CategoryGroup] = [
 CURATED_FORM_GROUPS: list[CategoryGroup] = [
     {"label": "Rhymes with LIME", "type": "form", "words": ["CHIME", "CRIME", "SLIME", "TIME"]},
     {"label": "Rhymes with COAST", "type": "form", "words": ["GHOST", "MOST", "POST", "ROAST"]},
-    {"label": "Sound like letters", "type": "form", "words": ["ARE", "QUEUE", "SEA", "WHY"]},
+    {"label": "Rhymes with MINT", "type": "form", "words": ["FLINT", "GLINT", "PRINT", "TINT"]},
 ]
 
 CURATED_ANAGRAM_GROUPS: list[CategoryGroup] = [
@@ -172,6 +172,130 @@ def load_semantic_bank() -> tuple[CategoryGroup, ...]:
     return tuple(dedupe_groups(groups))
 
 
+def semantic_group_signature(group: CategoryGroup) -> tuple[str, tuple[str, ...]]:
+    """Return a label-plus-word signature for semantic-bank overlap checks."""
+    return (
+        normalize_word_key(group["label"]),
+        tuple(sorted(normalize_word_key(word) for word in group["words"])),
+    )
+
+
+def semantic_word_signature(group: CategoryGroup) -> tuple[str, ...]:
+    """Return a word-only signature for semantic-bank overlap checks."""
+    return tuple(sorted(normalize_word_key(word) for word in group["words"]))
+
+
+@lru_cache(maxsize=1)
+def official_semantic_signatures() -> tuple[set[tuple[str, tuple[str, ...]]], set[tuple[str, ...]]]:
+    """Return normalized official NYT semantic signatures for duplicate detection."""
+    stats = load_official_stats_safe()
+    official_groups = [clone_group(group) for group in stats.get("category_banks", {}).get("semantic", [])]
+    full_signatures = {semantic_group_signature(group) for group in official_groups}
+    word_signatures = {semantic_word_signature(group) for group in official_groups}
+    return full_signatures, word_signatures
+
+
+def assert_semantic_bank_independent(groups: list[CategoryGroup]) -> None:
+    """Fail loudly when the independent semantic bank overlaps with official NYT data.
+
+    The final v6 workflow treats semantic-bank overlap as a submission blocker rather
+    than something to silently filter away.
+    """
+    official_full_signatures, official_word_signatures = official_semantic_signatures()
+    overlap_messages: list[str] = []
+
+    for group in groups:
+        full_signature = semantic_group_signature(group)
+        word_signature = semantic_word_signature(group)
+
+        if full_signature in official_full_signatures:
+            overlap_messages.append(f"exact semantic overlap: {group['label']} -> {group['words']}")
+        elif word_signature in official_word_signatures:
+            overlap_messages.append(f"semantic word-set overlap: {group['label']} -> {group['words']}")
+
+    if overlap_messages:
+        details = "; ".join(overlap_messages[:10])
+        raise RuntimeError(
+            "Independent semantic bank overlaps with the official NYT semantic bank. "
+            f"v6 final refuses to continue. Details: {details}"
+        )
+
+
+@lru_cache(maxsize=1)
+def load_independent_semantic_bank() -> tuple[CategoryGroup, ...]:
+    """Return only independently authored semantic groups and verify no NYT overlap."""
+    groups = [clone_group(group) for group in SEMANTIC_GROUPS]
+    deduped_groups = dedupe_groups(groups)
+    assert_semantic_bank_independent(deduped_groups)
+    return tuple(deduped_groups)
+
+
+def bank_group_signature(group: CategoryGroup) -> tuple[str, tuple[str, ...]]:
+    """Return a normalized label-plus-word signature for any bank group."""
+    return (
+        normalize_word_key(group["label"]),
+        tuple(sorted(normalize_word_key(word) for word in group["words"])),
+    )
+
+
+def bank_word_signature(group: CategoryGroup) -> tuple[str, ...]:
+    """Return a normalized word-only signature for any bank group."""
+    return tuple(sorted(normalize_word_key(word) for word in group["words"]))
+
+
+@lru_cache(maxsize=None)
+def official_bank_signatures(group_type: str) -> tuple[set[tuple[str, tuple[str, ...]]], set[tuple[str, ...]]]:
+    """Return normalized official NYT signatures for one bank type."""
+    stats = load_official_stats_safe()
+    official_groups = [clone_group(group) for group in stats.get("category_banks", {}).get(str(group_type), [])]
+    full_signatures = {bank_group_signature(group) for group in official_groups}
+    word_signatures = {bank_word_signature(group) for group in official_groups}
+    return full_signatures, word_signatures
+
+
+def assert_bank_independent(groups: list[CategoryGroup], official_group_type: str, bank_name: str) -> None:
+    """Fail loudly when an independently authored bank overlaps with official NYT data."""
+    official_full_signatures, official_word_signatures = official_bank_signatures(official_group_type)
+    overlap_messages: list[str] = []
+
+    for group in groups:
+        full_signature = bank_group_signature(group)
+        word_signature = bank_word_signature(group)
+
+        if full_signature in official_full_signatures:
+            overlap_messages.append(f"exact {bank_name} overlap: {group['label']} -> {group['words']}")
+        elif word_signature in official_word_signatures:
+            overlap_messages.append(f"{bank_name} word-set overlap: {group['label']} -> {group['words']}")
+
+    if overlap_messages:
+        details = "; ".join(overlap_messages[:10])
+        raise RuntimeError(
+            f"Independent {bank_name} bank overlaps with the official NYT {official_group_type} bank. "
+            f"v6 final refuses to continue. Details: {details}"
+        )
+
+
+def filter_groups_against_official_bank(groups: list[CategoryGroup], official_group_type: str) -> list[CategoryGroup]:
+    """Drop groups that exactly overlap with the official NYT bank for one type.
+
+    v6 uses this for dynamically generated form-like groups. Independently authored
+    banks are checked more strictly with `assert_bank_independent(...)`.
+    """
+    official_full_signatures, official_word_signatures = official_bank_signatures(official_group_type)
+    filtered_groups: list[CategoryGroup] = []
+
+    for group in groups:
+        full_signature = bank_group_signature(group)
+        word_signature = bank_word_signature(group)
+
+        if full_signature in official_full_signatures or word_signature in official_word_signatures:
+            continue
+
+        filtered_groups.append(clone_group(group))
+
+    return filtered_groups
+
+
 @lru_cache(maxsize=1)
 def load_theme_bank() -> tuple[CategoryGroup, ...]:
     """Return theme groups from the dataset plus curated and fallback banks."""
@@ -180,6 +304,16 @@ def load_theme_bank() -> tuple[CategoryGroup, ...]:
     groups.extend(clone_group(group) for group in CURATED_THEME_GROUPS)
     groups.extend(clone_group(group) for group in THEME_GROUPS)
     return tuple(dedupe_groups(groups))
+
+
+@lru_cache(maxsize=1)
+def load_independent_theme_bank() -> tuple[CategoryGroup, ...]:
+    """Return only independently authored theme groups and verify no NYT overlap."""
+    groups = [clone_group(group) for group in CURATED_THEME_GROUPS]
+    groups.extend(clone_group(group) for group in THEME_GROUPS)
+    deduped_groups = dedupe_groups(groups)
+    assert_bank_independent(deduped_groups, official_group_type="theme", bank_name="theme")
+    return tuple(deduped_groups)
 
 
 @lru_cache(maxsize=1)
@@ -193,6 +327,16 @@ def load_form_bank() -> tuple[CategoryGroup, ...]:
 
 
 @lru_cache(maxsize=1)
+def load_independent_form_bank() -> tuple[CategoryGroup, ...]:
+    """Return only independently authored form groups and verify no NYT overlap."""
+    groups = [clone_group(group) for group in CURATED_FORM_GROUPS]
+    groups.extend(clone_group(group) for group in FORM_GROUPS)
+    deduped_groups = dedupe_groups(groups)
+    assert_bank_independent(deduped_groups, official_group_type="form", bank_name="form")
+    return tuple(deduped_groups)
+
+
+@lru_cache(maxsize=1)
 def load_anagram_bank() -> tuple[CategoryGroup, ...]:
     """Return anagram-specific groups from curated and official form banks."""
     anagram_groups: list[CategoryGroup] = [clone_group(group) for group in CURATED_ANAGRAM_GROUPS]
@@ -202,6 +346,19 @@ def load_anagram_bank() -> tuple[CategoryGroup, ...]:
             anagram_groups.append(clone_group(group, group_type="anagram"))
 
     return tuple(dedupe_groups(anagram_groups))
+
+
+@lru_cache(maxsize=1)
+def load_independent_anagram_bank() -> tuple[CategoryGroup, ...]:
+    """Return only independently authored anagram groups and verify no NYT overlap.
+
+    Official NYT anagram-style groups live inside the broader form bank, so the
+    overlap check is performed against the official `form` bank.
+    """
+    anagram_groups: list[CategoryGroup] = [clone_group(group) for group in CURATED_ANAGRAM_GROUPS]
+    deduped_groups = dedupe_groups(anagram_groups)
+    assert_bank_independent(deduped_groups, official_group_type="form", bank_name="anagram")
+    return tuple(deduped_groups)
 
 
 @lru_cache(maxsize=1)

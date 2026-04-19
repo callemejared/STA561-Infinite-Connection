@@ -4,12 +4,42 @@ from __future__ import annotations
 
 from random import Random
 
-from generators.generator_resources import clone_group, load_anagram_bank, normalize_word_key
+from generators.generator_resources import (
+    attach_difficulty_metadata,
+    clone_group,
+    load_anagram_bank,
+    load_independent_anagram_bank,
+    normalize_word_key,
+)
 
 
 def list_anagram_groups() -> list[dict[str, object]]:
     """Return the available anagram groups."""
-    return [clone_group(group, group_type="anagram") for group in load_anagram_bank()]
+    groups = [clone_group(group, group_type="anagram") for group in load_anagram_bank()]
+    # Anagram banks are tiny and stable in this project, so we keep their
+    # difficulty metadata deliberately simple and centered at medium.
+    enriched_groups = attach_difficulty_metadata(groups, [0.5 for _ in groups], component_name="anagram_baseline")
+    return [clone_group(group) for group in enriched_groups]
+
+
+def list_independent_anagram_groups_v6() -> list[dict[str, object]]:
+    """Return independently authored anagram groups for the v6 final workflow."""
+    base_groups = [clone_group(group, group_type="anagram") for group in load_independent_anagram_bank()]
+    enriched_groups = attach_difficulty_metadata(
+        base_groups,
+        [0.5 for _ in base_groups],
+        component_name="anagram_baseline",
+    )
+    independent_groups: list[dict[str, object]] = []
+
+    for group in enriched_groups:
+        cloned_group = clone_group(group)
+        metadata = dict(cloned_group.get("metadata", {}))
+        metadata["anagram_source"] = "independent_v6"
+        cloned_group["metadata"] = metadata
+        independent_groups.append(cloned_group)
+
+    return independent_groups
 
 
 def sample_anagram_group(

@@ -4,10 +4,11 @@
 
 This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
 
-The repository now contains **two complementary workflows**:
+The repository now contains **three complementary workflows**:
 
 - **v4**: a higher-cost, validator-heavy pipeline for carefully filtered single puzzles
 - **v5**: a lower-cost, batch-oriented pipeline designed to generate large libraries quickly and support both reviewer and player-facing Streamlit interfaces
+- **v6 final**: the submission-ready branch, built on v5's cheap batch generator but with independently authored semantic/theme/form/anagram banks that hard-fail or filter out any overlap with official NYT groups
 
 The v4 pipeline keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
 
@@ -17,7 +18,16 @@ The v4 pipeline keeps the v3 repository structure, but extends the existing load
 - earlier rejection of trivial form groups,
 - and unified v4 naming for generation functions and outputs.
 
-The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator.
+The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator. The current **v6 final** branch keeps that low-cost workflow, then adds the final submission requirement that all reusable banked groups must be independent from official NYT groups.
+
+## Version Progression (v1-v6 Final)
+
+- **v1**: initial prototype for loading Connections-style groups and proving the 4-group / 16-word schema.
+- **v2**: dataset-loading and normalization stage, with reusable category-bank extraction from the official dataset.
+- **v3**: stronger generator/assembler baseline built on those banks, plus early puzzle validation and Streamlit integration.
+- **v4**: higher-cost quality pipeline with tier balancing, deeper ambiguity checks, rhyme handling, singleton-word checks, and validator-heavy acceptance.
+- **v5**: low-cost compatibility-graph batch generator designed for 10K-scale production, plus separate reviewer and player-facing Streamlit interfaces.
+- **v6 final**: submission-ready version built on v5, with independently authored semantic/theme/form/anagram banks, hard overlap protection against official NYT groups, and practical low-cost constraints so 10K puzzle generation stays fast.
 
 ## v5 Progress Update
 
@@ -29,6 +39,18 @@ Compared with v4, the current `codex-sta561-v5` branch adds four major pieces of
 - and a separate **player-facing game page** that presents one-click puzzle generation, shuffle/submit/deselect interactions, mistake tracking, solved-group colors, and end-of-game sharing.
 
 v4 remains useful as the stricter reference pipeline; v5 focuses on throughput, maintainability, and practical evaluation at scale.
+
+## v6 Final Update
+
+Compared with v5, the current `codex-sta561-v6-final` branch adds the final submission guarantees:
+
+- an **all-bank independence check** that compares independently authored semantic/theme/form/anagram banks against the official NYT banks and fails runtime initialization if any curated overlap is found,
+- a **final low-cost batch generator** that still uses compatibility-graph sampling instead of v4-style heavy rejection loops,
+- a **default reviewer interface** centered on final-batch generation and audit sampling,
+- a cleaned-up **player-facing final page** layered on top of the same cheap final generator,
+- and final generated groups that no longer carry `source_puzzle_id` references into output puzzles because the final banked groups are no longer sourced from official NYT entries.
+
+The purpose of v6 final is not to recover every expensive v4 guarantee. Instead, it is to produce a submission-ready version that scales to the competition workflow: generate a large batch quickly, then let instructors review a random subset manually.
 
 ## v4 Architecture
 
@@ -51,7 +73,7 @@ The v4 pipeline still follows the same high-level flow:
 8. `src/batch_generate_and_score.py`
    Batch-generates accepted puzzles into `accepted_v4.json` with a corresponding `generation_report_v4.json`.
 9. `src/app/app.py`
-   Loads `accepted_v4.json` or generates a fresh v4 puzzle in Streamlit.
+   Compatibility Streamlit entrypoint that forwards to the main dashboard module.
 
 ## Data Loading And Resources
 
@@ -266,12 +288,12 @@ Main v5 modules:
    Loads the semantic/theme/form/anagram banks once, normalizes them into reusable group records, assigns `mechanism_family` and `theme_frame_family`, and builds a lightweight compatibility graph. Puzzle generation then samples four mutually compatible groups directly from that graph.
 2. `src/batch_generate_v5.py`
    Batch-generates `generated_v5.json` and `generation_report_v5.json`, with defaults oriented toward the 10K-puzzle audit workflow.
-3. `src/app/app.py`
-   Now acts as the **v5 batch reviewer dashboard** on this branch. It can generate a large v5 library on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
-4. `src/app/pages/Play_v5.py`
-   Provides a separate **player-facing** Streamlit page. It presents a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary without changing the underlying v5 generator.
-5. `src/app/v5_game_logic.py`
-   Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
+3. `src/app/Evaluation.py`
+   Established the reviewer-dashboard pattern that the final branch still uses: generate a large batch on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
+4. `src/app/pages/Play.py`
+   The final branch's player-facing page inherits the same v5 interaction model: a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary layered on top of the cheap generator.
+5. `src/app/final_game_logic.py`
+   The final branch's game-state module keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
 
 ### v5 Hard Constraints
 
@@ -300,6 +322,59 @@ python src/batch_generate_v5.py --count 10000 --seed 561
 
 The report includes lightweight batch statistics such as runtime build time, generation time, throughput, mechanism-family counts, theme-frame counts, and difficulty-tier counts.
 
+## v6 Final Architecture
+
+The final branch keeps the cheap v5 batch-generation strategy, but changes the semantic-source rule and tightens the branch around the actual submission target.
+
+Main v6 final modules:
+
+1. `src/generators/puzzle_generator_v6.py`
+   Uses the same low-cost compatibility-graph approach as v5, but swaps in independent semantic/theme/form/anagram inputs for the final branch, blocks curated-bank overlap with official NYT groups, and applies practical diversity caps to keep 10K-scale generation cheap.
+2. `src/batch_generate_v6.py`
+   Batch-generates `generated_v6_final.json` and `generation_report_v6_final.json`, with defaults aimed at the final submission workflow.
+3. `src/app/Evaluation.py`
+   Acts as the **final batch reviewer dashboard** on this branch. It can generate the final library on demand, show progress during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
+4. `src/app/pages/Play.py`
+   Provides the separate **player-facing final page** with one-click puzzle generation, shuffle/submit/deselect controls, mistake tracking, solved-group colors, and share text.
+5. `src/app/final_game_logic.py`
+   Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
+
+### v6 Final Independence Rule
+
+The final branch adds one hard submission rule:
+
+- semantic, theme, form, and anagram base banks must come from independently authored sources,
+- those banks are checked against the corresponding official NYT banks by normalized label-plus-word signature and by normalized word-set signature,
+- and generation/runtime initialization fails immediately if any curated overlap is found.
+
+For dynamic form-like groups such as runtime-built rhyme or homophone sets, v6 final filters out any group whose normalized label/word signature would directly reuse an official NYT form group.
+
+This makes official-bank independence a hard invariant rather than a soft filtering preference.
+
+### v6 Final Speed-Oriented Limits
+
+v6 final still avoids the high-cost parts of v4, but it also adds a few cheap guardrails so the final 10K batch remains fast:
+
+- a tighter candidate-order cap during clique expansion,
+- a smaller global attempt multiplier for large batches,
+- a smaller duplicate-skip budget so the generator does not waste time chasing global uniqueness,
+- and simple per-puzzle type caps such as limiting how many semantic, theme, or form-like groups can appear in one puzzle.
+
+These are all low-cost controls that reduce branching without bringing back heavy puzzle-level validation.
+
+### v6 Final Outputs
+
+Default final outputs:
+
+- `data/generated/generated_v6_final.json`
+- `data/generated/generation_report_v6_final.json`
+
+Example:
+
+```bash
+python src/batch_generate_v6.py --count 10000 --seed 561
+```
+
 ## Streamlit App
 
 Launch the app with:
@@ -308,24 +383,24 @@ Launch the app with:
 streamlit run src/app/app.py
 ```
 
-On the `codex-sta561-v5` branch, the default Streamlit entrypoint is now the **v5 batch reviewer dashboard**. It can:
+On the `codex-sta561-v6-final` branch, the default Streamlit entrypoint is now the **Evaluation** page. It can:
 
-- generate a large v5 library directly from the app,
+- generate a large final library directly from the app,
 - show progress during runtime build and batch generation,
-- save `generated_v5.json` and `generation_report_v5.json`,
+- save `generated_v6_final.json` and `generation_report_v6_final.json`,
 - sample puzzles by ID for manual review,
 - and display the full answer set plus cheap metadata for each sampled puzzle.
 
-This branch also includes a separate **Play v5** page under Streamlit's multipage navigation. The player page can:
+This branch also includes a separate **Play** page under Streamlit's multipage navigation. The player page can:
 
-- generate a fresh playable v5 puzzle,
+- generate a fresh playable final puzzle,
 - show a 4x4 clickable tile grid,
 - support `Shuffle`, `Submit`, and `Deselect All`,
 - track `Mistakes Remaining`,
 - reveal solved groups in yellow/green/blue/purple order,
 - and show a simple share string after the game ends.
 
-The underlying v4 generation and validation modules are still present in the repository, but the default app flow on this branch is centered on v5 generation/review/play rather than the older v4 live-generator page.
+The underlying v4 and v5 generation modules are still present in the repository for comparison and history, but the default app flow on this branch is centered on final generation/review/play rather than the older v4 live-generator page.
 
 ## How To Run
 
@@ -353,16 +428,31 @@ Generate a v5 library:
 python src/batch_generate_v5.py --count 10000 --seed 561
 ```
 
+Generate the final submission library:
+
+```bash
+python src/batch_generate_v6.py --count 10000 --seed 561
+```
+
 Start Streamlit:
 
 ```bash
 streamlit run src/app/app.py
 ```
 
-After Streamlit starts on the v5 branch:
+After Streamlit starts on the final branch:
 
-- the main page is the **v5 batch reviewer**,
-- and the sidebar/page navigation exposes **Play v5** as the player-facing interface.
+- the main page is **Evaluation**,
+- and the sidebar/page navigation exposes **Play** as the player-facing interface.
+
+## v5 vs v6 Final
+
+Main differences from v5:
+
+- v5 focuses on cheap large-scale generation from reused banks; v6 final keeps that batch strategy but changes the source policy so semantic/theme/form/anagram base banks must come from independently authored inputs.
+- v5 treats official banks as reusable inputs; v6 final hard-fails if its independently authored banks overlap with the official NYT banks, and it filters out dynamic form-like groups that would still recreate an official form group.
+- v5 already removed v4's heaviest per-puzzle validation from the main loop; v6 final keeps that cheap path and adds a few practical diversity caps so 10K-scale generation stays reliable on modest compute.
+- v5 introduced reviewer/player interfaces; v6 final keeps both interfaces but makes them the default submission-ready surfaces for the branch.
 
 ## v4 vs v5
 
@@ -404,6 +494,7 @@ Modified under `src/`:
 - `src/validators/puzzle_validators.py`
 - `src/batch_generate_and_score.py`
 - `src/app/app.py`
+- `src/app/Evaluation.py`
 
 Related non-`src/` resource added:
 
@@ -413,11 +504,23 @@ Additional v5 files added under `src/`:
 
 - `src/generators/puzzle_generator_v5.py`
 - `src/batch_generate_v5.py`
-- `src/app/v5_game_logic.py`
-- `src/app/pages/Play_v5.py`
 
 Additional v5 files modified under `src/`:
 
+- `src/app/app.py` (compatibility entrypoint)
+- `src/app/Evaluation.py`
+
+Additional v6 final files added under `src/`:
+
+- `src/generators/puzzle_generator_v6.py`
+- `src/batch_generate_v6.py`
+- `src/app/final_game_logic.py`
+- `src/app/pages/Play.py`
+
+Additional v6 final files modified under `src/`:
+
+- `src/generators/generator_resources.py`
+- `src/generators/semantic_generator.py`
 - `src/app/app.py`
 
 ## Repository Structure
