@@ -454,11 +454,12 @@ def generate_puzzles_v6(count: int, seed: int = 0) -> list[dict[str, Any]]:
 def generate_puzzles_v6_with_progress(
     count: int,
     seed: int = 0,
+    runtime: V6Runtime | None = None,
     progress_callback: Callable[[int, int], None] | None = None,
     progress_interval: int = PROGRESS_UPDATE_INTERVAL,
 ) -> list[dict[str, Any]]:
     """Generate many final v6 puzzles and optionally report batch progress."""
-    runtime = initialize_v6_runtime()
+    active_runtime = runtime or initialize_v6_runtime()
     rng = Random(seed)
     puzzles: list[dict[str, Any]] = []
     seen_puzzle_signatures: set[tuple[tuple[str, ...], ...]] = set()
@@ -468,12 +469,12 @@ def generate_puzzles_v6_with_progress(
 
     while len(puzzles) < count and attempt_count < max_attempts:
         attempt_count += 1
-        selection = _sample_puzzle_indices(runtime, rng)
+        selection = _sample_puzzle_indices(active_runtime, rng)
 
         if selection is None:
             continue
 
-        selected_records = [runtime["records"][index] for index in selection]
+        selected_records = [active_runtime["records"][index] for index in selection]
         signature = _puzzle_signature(selected_records)
 
         # v6 still prefers variety early, but the final batch pipeline values

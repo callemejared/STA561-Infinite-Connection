@@ -251,6 +251,9 @@ if generate_clicked:
     try:
         runtime_start = perf_counter()
         status_box.info("Phase 1/2: building the final runtime and compatibility graph...")
+        # Evaluation is meant to reflect a fresh end-to-end batch run on every
+        # click, so we clear the memoized runtime before rebuilding it here.
+        initialize_v6_runtime.cache_clear()
         runtime = initialize_v6_runtime()
         runtime_seconds = perf_counter() - runtime_start
         progress_bar.progress(0.12, text="Runtime ready. Starting batch generation...")
@@ -269,6 +272,7 @@ if generate_clicked:
         puzzles = generate_puzzles_v6_with_progress(
             count=int(requested_count),
             seed=int(seed),
+            runtime=runtime,
             progress_callback=on_progress,
         )
         generation_seconds = perf_counter() - generation_start
