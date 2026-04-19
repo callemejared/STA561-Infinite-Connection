@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from functools import lru_cache
 from random import Random
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from generators.anagram_generator import list_anagram_groups
 from generators.form_generator import list_form_groups
@@ -46,6 +46,7 @@ FORM_LIKE_MECHANISMS = {
 NON_THEME_FRAME = "NOT_THEME"
 SELECTION_CANDIDATE_CAP = 18
 GENERATION_ATTEMPT_MULTIPLIER = 12
+PROGRESS_UPDATE_INTERVAL = 100
 
 
 def mechanism_family_for_group(group: dict[str, Any]) -> str:
@@ -400,6 +401,20 @@ def generate_puzzle_v5(
 
 def generate_puzzles_v5(count: int, seed: int = 0) -> list[dict[str, Any]]:
     """Generate many low-cost v5 puzzles for high-throughput offline review."""
+    return generate_puzzles_v5_with_progress(count=count, seed=seed)
+
+
+def generate_puzzles_v5_with_progress(
+    count: int,
+    seed: int = 0,
+    progress_callback: Callable[[int, int], None] | None = None,
+    progress_interval: int = PROGRESS_UPDATE_INTERVAL,
+) -> list[dict[str, Any]]:
+    """Generate many low-cost v5 puzzles and optionally report batch progress.
+
+    The callback is intentionally lightweight so Streamlit or CLI callers can show
+    progress without changing the cheap v5 sampling loop into a heavy live pipeline.
+    """
     runtime = initialize_v5_runtime()
     rng = Random(seed)
     puzzles: list[dict[str, Any]] = []
@@ -435,6 +450,12 @@ def generate_puzzles_v5(count: int, seed: int = 0) -> list[dict[str, Any]]:
             for record in selected_records
             if record["theme_frame_family"] != NON_THEME_FRAME
         )
+
+        if progress_callback is not None:
+            should_report = len(puzzles) == count or len(puzzles) % max(progress_interval, 1) == 0
+
+            if should_report:
+                progress_callback(len(puzzles), count)
 
     if len(puzzles) < count:
         raise ValueError(
