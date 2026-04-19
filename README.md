@@ -290,7 +290,7 @@ Main v5 modules:
    Batch-generates `generated_v5.json` and `generation_report_v5.json`, with defaults oriented toward the 10K-puzzle audit workflow.
 3. `src/app/app.py`
    Established the reviewer-dashboard pattern that the final branch still uses: generate a large batch on demand, show a progress bar during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
-4. `src/app/pages/Play_Final.py`
+4. `src/app/pages/Play.py`
    The final branch's player-facing page inherits the same v5 interaction model: a 4x4 tile board, shuffle/submit/deselect controls, mistake tracking, solved-group reveal order, and a share summary layered on top of the cheap generator.
 5. `src/app/final_game_logic.py`
    The final branch's game-state module keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
@@ -334,7 +334,7 @@ Main v6 final modules:
    Batch-generates `generated_v6_final.json` and `generation_report_v6_final.json`, with defaults aimed at the final submission workflow.
 3. `src/app/app.py`
    Acts as the **final batch reviewer dashboard** on this branch. It can generate the final library on demand, show progress during runtime build and puzzle generation, save the resulting JSON files, and let instructors draw or manually select puzzle IDs for review.
-4. `src/app/pages/Play_Final.py`
+4. `src/app/pages/Play.py`
    Provides the separate **player-facing final page** with one-click puzzle generation, shuffle/submit/deselect controls, mistake tracking, solved-group colors, and share text.
 5. `src/app/final_game_logic.py`
    Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
@@ -383,7 +383,7 @@ Launch the app with:
 streamlit run src/app/app.py
 ```
 
-On the `codex-sta561-v6-final` branch, the default Streamlit entrypoint is now the **final batch reviewer dashboard**. It can:
+On the `codex-sta561-v6-final` branch, the default Streamlit entrypoint is now the **Evaluation** page. It can:
 
 - generate a large final library directly from the app,
 - show progress during runtime build and batch generation,
@@ -391,7 +391,7 @@ On the `codex-sta561-v6-final` branch, the default Streamlit entrypoint is now t
 - sample puzzles by ID for manual review,
 - and display the full answer set plus cheap metadata for each sampled puzzle.
 
-This branch also includes a separate **Play Final** page under Streamlit's multipage navigation. The player page can:
+This branch also includes a separate **Play** page under Streamlit's multipage navigation. The player page can:
 
 - generate a fresh playable final puzzle,
 - show a 4x4 clickable tile grid,
@@ -442,8 +442,8 @@ streamlit run src/app/app.py
 
 After Streamlit starts on the final branch:
 
-- the main page is the **final batch reviewer**,
-- and the sidebar/page navigation exposes **Play Final** as the player-facing interface.
+- the main page is **Evaluation**,
+- and the sidebar/page navigation exposes **Play** as the player-facing interface.
 
 ## v5 vs v6 Final
 
@@ -513,7 +513,7 @@ Additional v6 final files added under `src/`:
 - `src/generators/puzzle_generator_v6.py`
 - `src/batch_generate_v6.py`
 - `src/app/final_game_logic.py`
-- `src/app/pages/Play_Final.py`
+- `src/app/pages/Play.py`
 
 Additional v6 final files modified under `src/`:
 

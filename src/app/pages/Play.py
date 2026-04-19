@@ -27,7 +27,7 @@ from final_game_logic import (
 
 DEFAULT_SEED = 561
 
-st.set_page_config(page_title="Play Infinite Connections", page_icon=":puzzle_piece:", layout="centered")
+st.set_page_config(page_title="Play", page_icon=":puzzle_piece:", layout="centered")
 
 
 def ensure_session_defaults() -> None:

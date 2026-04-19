@@ -35,7 +35,7 @@ DEFAULT_BATCH_SIZE = 10000
 DEFAULT_SEED = 561
 DEFAULT_SAMPLE_SIZE = 5
 
-st.set_page_config(page_title="Infinite Connections Final Batch Reviewer", page_icon=":clipboard:", layout="wide")
+st.set_page_config(page_title="Evaluation", page_icon=":clipboard:", layout="wide")
 
 
 def normalize_token(value: Any) -> str:
@@ -221,7 +221,7 @@ st.markdown(
 
 ensure_session_defaults()
 
-st.title("Infinite Connections Final Batch Reviewer")
+st.title("Evaluation")
 st.caption(
     "Generate the final 10K-scale batch once, then randomly sample or jump to puzzle IDs for direct answer review. "
     "This reviewer flow is built for TA / instructor auditing rather than gameplay."
