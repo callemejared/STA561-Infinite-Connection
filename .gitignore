@@ -11,4 +11,6 @@ env/
 data/generated/*
 !data/generated/.gitkeep
 !data/generated/accepted_v2.json
+!data/generated/accepted_v4.json
 !data/generated/generation_report_v2.json
+!data/generated/generation_report_v4.json

@@ -3,7 +3,6 @@
 # pandas
 # jupyter
 streamlit
-gensim
 nltk
 numpy
 pronouncing

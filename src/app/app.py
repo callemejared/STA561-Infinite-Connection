@@ -92,6 +92,16 @@ def load_library_puzzle(seed: int, mode: str, index: int | None) -> dict[str, An
     return random.Random(seed).choice(accepted_puzzles)
 
 
+def choose_default_puzzle(seed: int) -> tuple[dict[str, Any], str]:
+    """Prefer a saved puzzle for fast startup, then fall back to live generation."""
+    library_puzzle = load_library_puzzle(seed, mode="Random", index=None)
+
+    if library_puzzle is not None:
+        return library_puzzle, "Library puzzle (startup)"
+
+    return choose_valid_generated_puzzle(seed), "Generated live"
+
+
 def render_board(words: list[str]) -> None:
     """Render the words as a 4x4 board."""
     for row_start in range(0, 16, 4):
@@ -154,8 +164,8 @@ if "board_seed" not in st.session_state:
     st.session_state["board_seed"] = 561
 
 if "puzzle" not in st.session_state:
-    initial_puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
-    store_puzzle_in_state(initial_puzzle, st.session_state["board_seed"], "Generated live")
+    initial_puzzle, source_label = choose_default_puzzle(st.session_state["board_seed"])
+    store_puzzle_in_state(initial_puzzle, st.session_state["board_seed"], source_label)
 
 accepted_library = load_saved_accepted_puzzles()
 library_mode = st.radio("Library mode", ["Random", "By index"], horizontal=True)
@@ -180,8 +190,17 @@ st.caption("A data-driven NYT-style generator with v4 difficulty balancing and d
 control_columns = st.columns(3)
 
 if control_columns[0].button("Generate New Puzzle", use_container_width=True):
-    puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
-    store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
+    try:
+        puzzle = choose_valid_generated_puzzle(st.session_state["board_seed"])
+        store_puzzle_in_state(puzzle, st.session_state["board_seed"], "Generated live")
+    except RuntimeError:
+        fallback_puzzle = load_library_puzzle(st.session_state["board_seed"], "Random", None)
+
+        if fallback_puzzle is None:
+            st.error("Could not generate a live puzzle and no saved v4 library is available.")
+        else:
+            st.warning("Live generation was unavailable, so a saved library puzzle was loaded instead.")
+            store_puzzle_in_state(fallback_puzzle, st.session_state["board_seed"], "Library fallback")
 
 if control_columns[1].button("Load from Library", use_container_width=True):
     puzzle = load_library_puzzle(st.session_state["board_seed"], library_mode, library_index)
