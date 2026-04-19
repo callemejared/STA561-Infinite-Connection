@@ -128,6 +128,10 @@ def build_generation_report(
         "semantic_group_count": runtime.get("semantic_group_count"),
         "semantic_bank_mode": runtime.get("semantic_bank_mode"),
         "semantic_overlap_check": runtime.get("semantic_overlap_check"),
+        "official_overlap_check": runtime.get("official_overlap_check"),
+        "theme_bank_mode": runtime.get("theme_bank_mode"),
+        "form_bank_mode": runtime.get("form_bank_mode"),
+        "anagram_bank_mode": runtime.get("anagram_bank_mode"),
         "mechanism_family_counts": dict(mechanism_counts),
         "theme_frame_family_counts": dict(theme_frame_counts),
         "tier_counts": dict(tier_counts),
@@ -313,7 +317,10 @@ summary_columns[2].metric("Runtime build", f"{float(report.get('runtime_build_se
 summary_columns[3].metric("Generation time", f"{float(report.get('generation_seconds', 0.0)):.2f}s")
 st.caption(
     f"Semantic bank: `{report.get('semantic_bank_mode', 'unknown')}` | "
-    f"Overlap check: `{report.get('semantic_overlap_check', 'unknown')}`"
+    f"Theme bank: `{report.get('theme_bank_mode', 'unknown')}` | "
+    f"Form bank: `{report.get('form_bank_mode', 'unknown')}` | "
+    f"Anagram bank: `{report.get('anagram_bank_mode', 'unknown')}` | "
+    f"Official overlap check: `{report.get('official_overlap_check', report.get('semantic_overlap_check', 'unknown'))}`"
 )
 
 sampling_columns = st.columns([1.2, 1.1, 1.1, 2], vertical_alignment="bottom")

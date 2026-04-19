@@ -8,7 +8,7 @@ The repository now contains **three complementary workflows**:
 
 - **v4**: a higher-cost, validator-heavy pipeline for carefully filtered single puzzles
 - **v5**: a lower-cost, batch-oriented pipeline designed to generate large libraries quickly and support both reviewer and player-facing Streamlit interfaces
-- **v6 final**: the submission-ready branch, built on v5's cheap batch generator but with an independently authored semantic bank that hard-fails if it overlaps with official NYT semantic groups
+- **v6 final**: the submission-ready branch, built on v5's cheap batch generator but with independently authored semantic/theme/form/anagram banks that hard-fail or filter out any overlap with official NYT groups
 
 The v4 pipeline keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
 
@@ -18,7 +18,7 @@ The v4 pipeline keeps the v3 repository structure, but extends the existing load
 - earlier rejection of trivial form groups,
 - and unified v4 naming for generation functions and outputs.
 
-The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator. The current **v6 final** branch keeps that low-cost workflow, then adds the final submission requirement that semantic groups must be independent from the official NYT semantic bank.
+The newer v5 branch work keeps those reusable banks and metadata, but pivots toward the competition workflow of generating **10K puzzles**, sampling a subset for TA/instructor review, and exposing a cleaner player-facing app on top of the cheaper generator. The current **v6 final** branch keeps that low-cost workflow, then adds the final submission requirement that all reusable banked groups must be independent from official NYT groups.
 
 ## Version Progression (v1-v6 Final)
 
@@ -27,7 +27,7 @@ The newer v5 branch work keeps those reusable banks and metadata, but pivots tow
 - **v3**: stronger generator/assembler baseline built on those banks, plus early puzzle validation and Streamlit integration.
 - **v4**: higher-cost quality pipeline with tier balancing, deeper ambiguity checks, rhyme handling, singleton-word checks, and validator-heavy acceptance.
 - **v5**: low-cost compatibility-graph batch generator designed for 10K-scale production, plus separate reviewer and player-facing Streamlit interfaces.
-- **v6 final**: submission-ready version built on v5, with an independently authored semantic bank, hard overlap rejection against official NYT semantic groups, and practical low-cost constraints so 10K puzzle generation stays fast.
+- **v6 final**: submission-ready version built on v5, with independently authored semantic/theme/form/anagram banks, hard overlap protection against official NYT groups, and practical low-cost constraints so 10K puzzle generation stays fast.
 
 ## v5 Progress Update
 
@@ -44,10 +44,11 @@ v4 remains useful as the stricter reference pipeline; v5 focuses on throughput, 
 
 Compared with v5, the current `codex-sta561-v6-final` branch adds the final submission guarantees:
 
-- a **semantic-bank independence check** that compares every independently authored semantic group against the official NYT semantic bank and fails runtime initialization if any overlap is found,
+- an **all-bank independence check** that compares independently authored semantic/theme/form/anagram banks against the official NYT banks and fails runtime initialization if any curated overlap is found,
 - a **final low-cost batch generator** that still uses compatibility-graph sampling instead of v4-style heavy rejection loops,
 - a **default reviewer interface** centered on final-batch generation and audit sampling,
-- and a cleaned-up **player-facing final page** layered on top of the same cheap final generator.
+- a cleaned-up **player-facing final page** layered on top of the same cheap final generator,
+- and final generated groups that no longer carry `source_puzzle_id` references into output puzzles because the final banked groups are no longer sourced from official NYT entries.
 
 The purpose of v6 final is not to recover every expensive v4 guarantee. Instead, it is to produce a submission-ready version that scales to the competition workflow: generate a large batch quickly, then let instructors review a random subset manually.
 
@@ -328,7 +329,7 @@ The final branch keeps the cheap v5 batch-generation strategy, but changes the s
 Main v6 final modules:
 
 1. `src/generators/puzzle_generator_v6.py`
-   Uses the same low-cost compatibility-graph approach as v5, but swaps in `list_independent_semantic_groups_v6()` for semantic input, hard-fails if semantic-bank overlap is detected, and applies practical diversity caps to keep 10K-scale generation cheap.
+   Uses the same low-cost compatibility-graph approach as v5, but swaps in independent semantic/theme/form/anagram inputs for the final branch, blocks curated-bank overlap with official NYT groups, and applies practical diversity caps to keep 10K-scale generation cheap.
 2. `src/batch_generate_v6.py`
    Batch-generates `generated_v6_final.json` and `generation_report_v6_final.json`, with defaults aimed at the final submission workflow.
 3. `src/app/app.py`
@@ -338,15 +339,17 @@ Main v6 final modules:
 5. `src/app/final_game_logic.py`
    Keeps player-game state, guess evaluation, solved-group ordering, shuffle behavior, and share-string construction separate from the Streamlit presentation layer.
 
-### v6 Final Semantic Independence Rule
+### v6 Final Independence Rule
 
 The final branch adds one hard submission rule:
 
-- semantic groups must come from an independently authored semantic bank,
-- the bank is checked against the official NYT semantic bank by normalized label-plus-word signature and by normalized word-set signature,
-- and generation/runtime initialization fails immediately if any overlap is found.
+- semantic, theme, form, and anagram base banks must come from independently authored sources,
+- those banks are checked against the corresponding official NYT banks by normalized label-plus-word signature and by normalized word-set signature,
+- and generation/runtime initialization fails immediately if any curated overlap is found.
 
-This makes semantic independence a hard invariant rather than a soft filtering preference.
+For dynamic form-like groups such as runtime-built rhyme or homophone sets, v6 final filters out any group whose normalized label/word signature would directly reuse an official NYT form group.
+
+This makes official-bank independence a hard invariant rather than a soft filtering preference.
 
 ### v6 Final Speed-Oriented Limits
 
@@ -446,8 +449,8 @@ After Streamlit starts on the final branch:
 
 Main differences from v5:
 
-- v5 focuses on cheap large-scale generation from reused banks; v6 final keeps that batch strategy but changes the semantic source so semantic groups must come from an independently authored bank.
-- v5 treats all source banks as reusable inputs; v6 final hard-fails if its independent semantic bank overlaps with the official NYT semantic bank.
+- v5 focuses on cheap large-scale generation from reused banks; v6 final keeps that batch strategy but changes the source policy so semantic/theme/form/anagram base banks must come from independently authored inputs.
+- v5 treats official banks as reusable inputs; v6 final hard-fails if its independently authored banks overlap with the official NYT banks, and it filters out dynamic form-like groups that would still recreate an official form group.
 - v5 already removed v4's heaviest per-puzzle validation from the main loop; v6 final keeps that cheap path and adds a few practical diversity caps so 10K-scale generation stays reliable on modest compute.
 - v5 introduced reviewer/player interfaces; v6 final keeps both interfaces but makes them the default submission-ready surfaces for the branch.
 

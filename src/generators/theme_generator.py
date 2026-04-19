@@ -9,6 +9,7 @@ from generators.generator_resources import (
     ambiguous_broad_categories,
     attach_difficulty_metadata,
     clone_group,
+    load_independent_theme_bank,
     load_theme_bank,
     normalize_word_key,
     revealing_label_overlap,
@@ -62,6 +63,24 @@ def list_theme_groups() -> list[dict[str, object]]:
             "broad_category_flags": ambiguous_broad_categories(group),
             "self_revealing_words": revealing_label_overlap(group),
             "global_distractibility": raw_score,
+        }
+
+    return [clone_group(group) for group in enriched_groups]
+
+
+@lru_cache(maxsize=1)
+def list_independent_theme_groups_v6() -> list[dict[str, object]]:
+    """Return only independently authored theme groups for the v6 final workflow."""
+    filtered_groups = [clone_group(group) for group in load_independent_theme_bank() if _is_valid_theme_group(group)]
+    raw_scores = [float(theme_global_distractibility(str(group["label"]), list(group["words"]))) for group in filtered_groups]
+    enriched_groups = attach_difficulty_metadata(filtered_groups, raw_scores, component_name="theme_distractibility")
+
+    for group, raw_score in zip(enriched_groups, raw_scores):
+        group["metadata"] = {
+            "broad_category_flags": ambiguous_broad_categories(group),
+            "self_revealing_words": revealing_label_overlap(group),
+            "global_distractibility": raw_score,
+            "theme_source": "independent_v6",
         }
 
     return [clone_group(group) for group in enriched_groups]

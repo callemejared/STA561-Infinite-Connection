@@ -4,12 +4,26 @@ from __future__ import annotations
 
 from random import Random
 
-from generators.generator_resources import clone_group, load_anagram_bank, normalize_word_key
+from generators.generator_resources import clone_group, load_anagram_bank, load_independent_anagram_bank, normalize_word_key
 
 
 def list_anagram_groups() -> list[dict[str, object]]:
     """Return the available anagram groups."""
     return [clone_group(group, group_type="anagram") for group in load_anagram_bank()]
+
+
+def list_independent_anagram_groups_v6() -> list[dict[str, object]]:
+    """Return independently authored anagram groups for the v6 final workflow."""
+    independent_groups: list[dict[str, object]] = []
+
+    for group in load_independent_anagram_bank():
+        cloned_group = clone_group(group, group_type="anagram")
+        metadata = dict(cloned_group.get("metadata", {}))
+        metadata["anagram_source"] = "independent_v6"
+        cloned_group["metadata"] = metadata
+        independent_groups.append(cloned_group)
+
+    return independent_groups
 
 
 def sample_anagram_group(

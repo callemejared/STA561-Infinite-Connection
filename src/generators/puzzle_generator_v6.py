@@ -18,8 +18,8 @@ from functools import lru_cache
 from random import Random
 from typing import Any, Callable, Iterable
 
-from generators.anagram_generator import list_anagram_groups
-from generators.form_generator import list_form_groups
+from generators.anagram_generator import list_independent_anagram_groups_v6
+from generators.form_generator import list_independent_form_groups_v6
 from generators.generator_resources import (
     clone_group,
     detect_form_pattern_value,
@@ -27,7 +27,7 @@ from generators.generator_resources import (
     normalize_word_key,
 )
 from generators.semantic_generator import list_independent_semantic_groups_v6
-from generators.theme_generator import list_theme_groups
+from generators.theme_generator import list_independent_theme_groups_v6
 
 GroupRecord = dict[str, Any]
 V6Runtime = dict[str, Any]
@@ -352,6 +352,10 @@ def _build_puzzle_v6(records: list[GroupRecord], puzzle_id: str) -> dict[str, An
         "generation": {
             "semantic_bank_mode": "independent_v6",
             "semantic_overlap_check": "passed",
+            "official_overlap_check": "passed",
+            "theme_bank_mode": "independent_v6",
+            "form_bank_mode": "independent_v6",
+            "anagram_bank_mode": "independent_v6",
             "mechanism_families": [record["mechanism_family"] for record in records],
             "theme_frame_families": [
                 record["theme_frame_family"]
@@ -366,13 +370,14 @@ def _build_puzzle_v6(records: list[GroupRecord], puzzle_id: str) -> dict[str, An
 def initialize_v6_runtime() -> V6Runtime:
     """Load banks once and build the final cheap compatibility graph for v6."""
     # v6 keeps preprocessing one-time and cheap at sampling time. The semantic
-    # bank comes only from independently authored semantic groups and raises
-    # immediately if it overlaps with official NYT semantic sets.
+    # bank comes only from independently authored groups, and runtime raises
+    # immediately if any curated semantic/theme/form/anagram bank overlaps with
+    # official NYT groups.
     source_groups = (
         list_independent_semantic_groups_v6()
-        + list_theme_groups()
-        + list_form_groups()
-        + list_anagram_groups()
+        + list_independent_theme_groups_v6()
+        + list_independent_form_groups_v6()
+        + list_independent_anagram_groups_v6()
     )
 
     records: list[GroupRecord] = []
@@ -418,6 +423,10 @@ def initialize_v6_runtime() -> V6Runtime:
         "semantic_group_count": sum(1 for record in records if record["type"] == "semantic"),
         "semantic_bank_mode": "independent_v6",
         "semantic_overlap_check": "passed",
+        "official_overlap_check": "passed",
+        "theme_bank_mode": "independent_v6",
+        "form_bank_mode": "independent_v6",
+        "anagram_bank_mode": "independent_v6",
     }
 
 

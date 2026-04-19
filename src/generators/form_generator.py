@@ -15,10 +15,12 @@ from generators.generator_resources import (
     count_words_matching_pattern,
     detect_form_pattern_value,
     detect_form_subtype,
+    filter_groups_against_official_bank,
     form_pattern_blacklisted,
     group_rhyme_ending,
     label_rhyme_target,
     load_form_bank,
+    load_independent_form_bank,
     normalize_word_key,
     pattern_coverage_ratio,
     pronunciation_list,
@@ -206,6 +208,64 @@ def list_form_groups() -> list[dict[str, object]]:
             {
                 "broad_category_flags": ambiguous_broad_categories(group),
                 "sampling_weight": max(sampling_weight, 0.001),
+            }
+        )
+        group["metadata"] = metadata
+
+    deduped: list[dict[str, object]] = []
+    seen_keys: set[tuple[str, tuple[str, ...]]] = set()
+
+    for group in enriched_groups:
+        key = (
+            str(group.get("metadata", {}).get("subtype") or "form"),
+            tuple(sorted(normalize_word_key(word) for word in group["words"])),
+        )
+
+        if key in seen_keys:
+            continue
+
+        seen_keys.add(key)
+        deduped.append(group)
+
+    return [clone_group(group) for group in deduped]
+
+
+@lru_cache(maxsize=1)
+def list_independent_form_groups_v6() -> list[dict[str, object]]:
+    """Return independently authored plus dynamic form groups for the v6 final workflow.
+
+    The independently authored base bank must not overlap with official NYT form
+    groups. Dynamically generated rhyme/homophone groups are then filtered against
+    the official form bank so the final v6 output does not directly reuse official
+    form-style groups.
+    """
+    groups: list[dict[str, object]] = [_annotate_existing_form_group(group) for group in load_independent_form_bank()]
+    groups.extend(clone_group(group) for group in build_rhyme_groups())
+    groups.extend(clone_group(group) for group in build_homophone_groups())
+
+    filtered_groups = [clone_group(group) for group in groups if _is_valid_form_group(group)]
+    filtered_groups = filter_groups_against_official_bank(filtered_groups, official_group_type="form")
+    raw_scores: list[float] = []
+
+    for group in filtered_groups:
+        match_count = int(group.get("metadata", {}).get("pattern_match_count", len(group["words"])))
+        raw_scores.append(1.0 / max(match_count, 1))
+
+    enriched_groups = attach_difficulty_metadata(filtered_groups, raw_scores, component_name="pattern_rarity")
+
+    for group, raw_score in zip(enriched_groups, raw_scores):
+        metadata = dict(group.get("metadata", {}))
+        rhyme_frequency = metadata.get("rhyme_frequency")
+        sampling_weight = raw_score
+
+        if rhyme_frequency:
+            sampling_weight /= max(float(rhyme_frequency), 1.0)
+
+        metadata.update(
+            {
+                "broad_category_flags": ambiguous_broad_categories(group),
+                "sampling_weight": max(sampling_weight, 0.001),
+                "form_source": "independent_v6",
             }
         )
         group["metadata"] = metadata
