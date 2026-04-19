@@ -15,18 +15,18 @@ from generators.puzzle_generator_v5 import generate_puzzle_v5, initialize_v5_run
 
 MISTAKE_LIMIT = 4
 COLOR_SEQUENCE = (
-    ("yellow", "#f9dc5c"),
-    ("green", "#8cc084"),
-    ("blue", "#6aa6ff"),
-    ("purple", "#9b72cf"),
+    ("yellow", "#f0d98b"),
+    ("green", "#a9c58c"),
+    ("blue", "#8fb7d8"),
+    ("purple", "#b89ad9"),
 )
 RESULT_EMOJI = {
-    "yellow": "🟨",
-    "green": "🟩",
-    "blue": "🟦",
-    "purple": "🟪",
-    "one_away": "🟧",
-    "wrong": "⬛",
+    "yellow": "\U0001F7E8",
+    "green": "\U0001F7E9",
+    "blue": "\U0001F7E6",
+    "purple": "\U0001F7EA",
+    "one_away": "\U0001F7E7",
+    "wrong": "\u2B1B",
 }
 
 
