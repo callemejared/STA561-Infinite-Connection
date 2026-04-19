@@ -13,16 +13,21 @@ import json
 import random
 from collections import Counter
 from pathlib import Path
+import sys
 from time import perf_counter
 from typing import Any
 
 import streamlit as st
 
-from generators.puzzle_generator_v5 import generate_puzzles_v5_with_progress, initialize_v5_runtime
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_ROOT = PROJECT_ROOT / "src"
 GENERATED_V5_PATH = PROJECT_ROOT / "data" / "generated" / "generated_v5.json"
 REPORT_V5_PATH = PROJECT_ROOT / "data" / "generated" / "generation_report_v5.json"
+
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
+from generators.puzzle_generator_v5 import generate_puzzles_v5_with_progress, initialize_v5_runtime
 
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 NON_THEME_FRAME = "NOT_THEME"
