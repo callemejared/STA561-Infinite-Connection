@@ -27,10 +27,14 @@ REPORT_V6_FINAL_PATH = PROJECT_ROOT / "data" / "generated" / "generation_report_
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from generators.puzzle_generator_v6 import (
-    clear_v6_runtime_caches,
-    generate_puzzles_v6_with_progress,
-    initialize_v6_runtime,
+from generators import puzzle_generator_v6 as puzzle_generator_v6
+
+generate_puzzles_v6_with_progress = puzzle_generator_v6.generate_puzzles_v6_with_progress
+initialize_v6_runtime = puzzle_generator_v6.initialize_v6_runtime
+clear_v6_runtime_caches = getattr(
+    puzzle_generator_v6,
+    "clear_v6_runtime_caches",
+    initialize_v6_runtime.cache_clear,
 )
 
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
