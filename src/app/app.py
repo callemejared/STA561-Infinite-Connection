@@ -1,6 +1,6 @@
-"""Streamlit dashboard for generating and reviewing large v5 puzzle batches.
+"""Streamlit dashboard for generating and reviewing final v6 puzzle batches.
 
-The v5 app is designed for the competition review workflow:
+The final app is designed for the competition review workflow:
 - one click generates a 10K puzzle library
 - progress stays visible during runtime build and batch generation
 - every puzzle has a stable ID
@@ -21,13 +21,13 @@ import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = PROJECT_ROOT / "src"
-GENERATED_V5_PATH = PROJECT_ROOT / "data" / "generated" / "generated_v5.json"
-REPORT_V5_PATH = PROJECT_ROOT / "data" / "generated" / "generation_report_v5.json"
+GENERATED_V6_FINAL_PATH = PROJECT_ROOT / "data" / "generated" / "generated_v6_final.json"
+REPORT_V6_FINAL_PATH = PROJECT_ROOT / "data" / "generated" / "generation_report_v6_final.json"
 
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from generators.puzzle_generator_v5 import generate_puzzles_v5_with_progress, initialize_v5_runtime
+from generators.puzzle_generator_v6 import generate_puzzles_v6_with_progress, initialize_v6_runtime
 
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 NON_THEME_FRAME = "NOT_THEME"
@@ -35,7 +35,7 @@ DEFAULT_BATCH_SIZE = 10000
 DEFAULT_SEED = 561
 DEFAULT_SAMPLE_SIZE = 5
 
-st.set_page_config(page_title="Infinite Connections v5 Batch Reviewer", page_icon=":clipboard:", layout="wide")
+st.set_page_config(page_title="Infinite Connections Final Batch Reviewer", page_icon=":clipboard:", layout="wide")
 
 
 def normalize_token(value: Any) -> str:
@@ -49,7 +49,7 @@ def normalize_list(values: list[Any]) -> tuple[str, ...]:
 
 
 def save_json(payload: Any, output_path: Path) -> Path:
-    """Persist a generated v5 artifact to disk."""
+    """Persist a generated final artifact to disk."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_path.open("w", encoding="utf-8") as file:
@@ -105,7 +105,7 @@ def build_generation_report(
     runtime_seconds: float,
     generation_seconds: float,
 ) -> dict[str, Any]:
-    """Build a lightweight summary for the generated v5 batch."""
+    """Build a lightweight summary for the generated final batch."""
     mechanism_counts: Counter[str] = Counter()
     theme_frame_counts: Counter[str] = Counter()
     tier_counts: Counter[str] = Counter()
@@ -125,6 +125,9 @@ def build_generation_report(
         "generation_seconds": round(generation_seconds, 3),
         "puzzles_per_second": round(len(puzzles) / max(generation_seconds, 1e-9), 3),
         "record_count": runtime["record_count"],
+        "semantic_group_count": runtime.get("semantic_group_count"),
+        "semantic_bank_mode": runtime.get("semantic_bank_mode"),
+        "semantic_overlap_check": runtime.get("semantic_overlap_check"),
         "mechanism_family_counts": dict(mechanism_counts),
         "theme_frame_family_counts": dict(theme_frame_counts),
         "tier_counts": dict(tier_counts),
@@ -214,10 +217,10 @@ st.markdown(
 
 ensure_session_defaults()
 
-st.title("Infinite Connections v5 Batch Reviewer")
+st.title("Infinite Connections Final Batch Reviewer")
 st.caption(
-    "Generate a large v5 batch once, then randomly sample or jump to puzzle IDs for direct answer review. "
-    "This app is intentionally built for TA / instructor auditing rather than gameplay."
+    "Generate the final 10K-scale batch once, then randomly sample or jump to puzzle IDs for direct answer review. "
+    "This reviewer flow is built for TA / instructor auditing rather than gameplay."
 )
 
 control_columns = st.columns([1, 1, 1.2], vertical_alignment="bottom")
@@ -238,62 +241,67 @@ seed = control_columns[1].number_input(
 generate_clicked = control_columns[2].button("Generate Batch", use_container_width=True)
 
 if generate_clicked:
-    progress_bar = st.progress(0.0, text="Starting v5 batch generation...")
+    progress_bar = st.progress(0.0, text="Starting final batch generation...")
     status_box = st.empty()
 
-    runtime_start = perf_counter()
-    status_box.info("Phase 1/2: building the v5 runtime and compatibility graph...")
-    runtime = initialize_v5_runtime()
-    runtime_seconds = perf_counter() - runtime_start
-    progress_bar.progress(0.12, text="Runtime ready. Starting batch generation...")
+    try:
+        runtime_start = perf_counter()
+        status_box.info("Phase 1/2: building the final runtime and compatibility graph...")
+        runtime = initialize_v6_runtime()
+        runtime_seconds = perf_counter() - runtime_start
+        progress_bar.progress(0.12, text="Runtime ready. Starting batch generation...")
 
-    generation_start = perf_counter()
-    status_box.info(f"Phase 2/2: generating {int(requested_count):,} puzzles...")
+        generation_start = perf_counter()
+        status_box.info(f"Phase 2/2: generating {int(requested_count):,} puzzles...")
 
-    def on_progress(done_count: int, total_count: int) -> None:
-        generation_fraction = done_count / max(total_count, 1)
-        overall_fraction = 0.12 + (0.88 * generation_fraction)
-        progress_bar.progress(
-            min(overall_fraction, 1.0),
-            text=f"Generating puzzles... {done_count:,} / {total_count:,}",
+        def on_progress(done_count: int, total_count: int) -> None:
+            generation_fraction = done_count / max(total_count, 1)
+            overall_fraction = 0.12 + (0.88 * generation_fraction)
+            progress_bar.progress(
+                min(overall_fraction, 1.0),
+                text=f"Generating puzzles... {done_count:,} / {total_count:,}",
+            )
+
+        puzzles = generate_puzzles_v6_with_progress(
+            count=int(requested_count),
+            seed=int(seed),
+            progress_callback=on_progress,
+        )
+        generation_seconds = perf_counter() - generation_start
+        report = build_generation_report(
+            puzzles=puzzles,
+            runtime=runtime,
+            seed=int(seed),
+            requested_count=int(requested_count),
+            runtime_seconds=runtime_seconds,
+            generation_seconds=generation_seconds,
         )
 
-    puzzles = generate_puzzles_v5_with_progress(
-        count=int(requested_count),
-        seed=int(seed),
-        progress_callback=on_progress,
-    )
-    generation_seconds = perf_counter() - generation_start
-    report = build_generation_report(
-        puzzles=puzzles,
-        runtime=runtime,
-        seed=int(seed),
-        requested_count=int(requested_count),
-        runtime_seconds=runtime_seconds,
-        generation_seconds=generation_seconds,
-    )
+        save_json(puzzles, GENERATED_V6_FINAL_PATH)
+        save_json(report, REPORT_V6_FINAL_PATH)
 
-    save_json(puzzles, GENERATED_V5_PATH)
-    save_json(report, REPORT_V5_PATH)
+        prepared_library = prepare_library(puzzles)
+        st.session_state["prepared_library"] = prepared_library
+        st.session_state["generation_report"] = report
+        st.session_state["selected_ids"] = sample_puzzle_ids(prepared_library, DEFAULT_SAMPLE_SIZE, int(seed))
+        st.session_state["current_puzzle_id"] = prepared_library[0]["puzzle_id"] if prepared_library else None
 
-    prepared_library = prepare_library(puzzles)
-    st.session_state["prepared_library"] = prepared_library
-    st.session_state["generation_report"] = report
-    st.session_state["selected_ids"] = sample_puzzle_ids(prepared_library, DEFAULT_SAMPLE_SIZE, int(seed))
-    st.session_state["current_puzzle_id"] = prepared_library[0]["puzzle_id"] if prepared_library else None
-
-    progress_bar.progress(1.0, text=f"Finished generating {len(puzzles):,} puzzles.")
-    status_box.success(
-        f"Generated {len(puzzles):,} puzzles in {generation_seconds:.2f}s after a {runtime_seconds:.2f}s runtime build. "
-        f"Files were saved to `{GENERATED_V5_PATH.name}` and `{REPORT_V5_PATH.name}`."
-    )
+        progress_bar.progress(1.0, text=f"Finished generating {len(puzzles):,} puzzles.")
+        status_box.success(
+            f"Generated {len(puzzles):,} puzzles in {generation_seconds:.2f}s after a {runtime_seconds:.2f}s runtime build. "
+            f"Files were saved to `{GENERATED_V6_FINAL_PATH.name}` and `{REPORT_V6_FINAL_PATH.name}`."
+        )
+    except Exception as error:
+        progress_bar.empty()
+        status_box.error(f"Final batch generation failed: {error}")
+        st.stop()
 
 prepared_library = st.session_state.get("prepared_library")
 report = st.session_state.get("generation_report")
 
 if prepared_library is None or report is None:
     st.info(
-        "Click `Generate Batch` to build a fresh v5 library. The app will generate the full batch, "
+        "Click `Generate Batch` to build the final v6 library. The app will generate the full batch, "
         "show progress, save the JSON files locally, and then open the review tools below."
     )
     st.stop()
@@ -303,6 +311,10 @@ summary_columns[0].metric("Generated puzzles", int(report.get("generated_count",
 summary_columns[1].metric("Throughput", f"{float(report.get('puzzles_per_second', 0.0)):.1f}/s")
 summary_columns[2].metric("Runtime build", f"{float(report.get('runtime_build_seconds', 0.0)):.2f}s")
 summary_columns[3].metric("Generation time", f"{float(report.get('generation_seconds', 0.0)):.2f}s")
+st.caption(
+    f"Semantic bank: `{report.get('semantic_bank_mode', 'unknown')}` | "
+    f"Overlap check: `{report.get('semantic_overlap_check', 'unknown')}`"
+)
 
 sampling_columns = st.columns([1.2, 1.1, 1.1, 2], vertical_alignment="bottom")
 sample_size = sampling_columns[0].number_input(
@@ -358,13 +370,13 @@ download_columns = st.columns([1, 1.2, 3])
 download_columns[0].download_button(
     "Download full report",
     data=json.dumps(report, indent=2, ensure_ascii=False),
-    file_name="generation_report_v5.json",
+    file_name="generation_report_v6_final.json",
     mime="application/json",
 )
 download_columns[1].download_button(
     "Download sample",
     data=json.dumps(selected_payload, indent=2, ensure_ascii=False),
-    file_name="v5_review_sample.json",
+    file_name="final_review_sample.json",
     mime="application/json",
 )
 download_columns[2].caption(

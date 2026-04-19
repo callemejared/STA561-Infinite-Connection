@@ -10,6 +10,7 @@ from generators.generator_resources import (
     attach_difficulty_metadata,
     clone_group,
     label_wordnet_depth,
+    load_independent_semantic_bank,
     load_semantic_bank,
     normalize_word_key,
     revealing_label_overlap,
@@ -62,6 +63,28 @@ def list_semantic_groups() -> list[dict[str, object]]:
             "broad_category_flags": ambiguous_broad_categories(group),
             "self_revealing_words": revealing_label_overlap(group),
             "wordnet_depth": raw_score,
+        }
+
+    return [clone_group(group) for group in enriched_groups]
+
+
+@lru_cache(maxsize=1)
+def list_independent_semantic_groups_v6() -> list[dict[str, object]]:
+    """Return only independently authored semantic groups for the v6 final workflow.
+
+    Unlike v4/v5, this bank explicitly excludes official NYT semantic groups and
+    raises upstream if any curated semantic set overlaps with the official bank.
+    """
+    filtered_groups = [clone_group(group) for group in load_independent_semantic_bank() if _is_valid_semantic_group(group)]
+    raw_scores = [float(label_wordnet_depth(str(group["label"]))) for group in filtered_groups]
+    enriched_groups = attach_difficulty_metadata(filtered_groups, raw_scores, component_name="wordnet_depth")
+
+    for group, raw_score in zip(enriched_groups, raw_scores):
+        group["metadata"] = {
+            "broad_category_flags": ambiguous_broad_categories(group),
+            "self_revealing_words": revealing_label_overlap(group),
+            "wordnet_depth": raw_score,
+            "semantic_source": "independent_v6",
         }
 
     return [clone_group(group) for group in enriched_groups]

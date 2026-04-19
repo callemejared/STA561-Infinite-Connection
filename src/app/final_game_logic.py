@@ -1,8 +1,8 @@
-"""Game-state helpers for the player-facing Infinite Connections v5 page.
+"""Game-state helpers for the player-facing final Infinite Connections page.
 
-The UI layer should only render controls and session state. Puzzle generation,
-tile ordering, guess evaluation, solved-group ordering, and share-summary logic
-live here so the play page stays focused on presentation.
+The UI layer only renders controls and session state. Puzzle generation, tile
+ordering, guess evaluation, solved-group ordering, and share-summary logic live
+here so the page stays focused on presentation.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import random
 from copy import deepcopy
 from typing import Any
 
-from generators.puzzle_generator_v5 import generate_puzzle_v5, initialize_v5_runtime
+from generators.puzzle_generator_v6 import generate_puzzle_v6, initialize_v6_runtime
 
 MISTAKE_LIMIT = 4
 COLOR_SEQUENCE = (
@@ -31,12 +31,7 @@ RESULT_EMOJI = {
 
 
 def order_groups_for_play(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Sort groups into an easiest-to-hardest display order and attach colors.
-
-    v5 groups do not have four named NYT difficulty colors, so we derive the play
-    order from their numeric difficulty score and then map that order onto the
-    yellow/green/blue/purple palette for the user-facing game.
-    """
+    """Sort groups into easiest-to-hardest order and attach play colors."""
     sorted_groups = sorted(
         [deepcopy(group) for group in groups],
         key=lambda group: (
@@ -69,7 +64,7 @@ def shuffled_unsolved_words(game_state: dict[str, Any], seed: int) -> list[str]:
 
 
 def build_game_state(puzzle: dict[str, Any], display_seed: int) -> dict[str, Any]:
-    """Create one fresh game-state payload from a generated v5 puzzle."""
+    """Create one fresh game-state payload from a generated final puzzle."""
     ordered_groups = order_groups_for_play(list(puzzle.get("groups", [])))
     tile_ids = {
         word: f"tile_{index:02d}"
@@ -93,11 +88,11 @@ def build_game_state(puzzle: dict[str, Any], display_seed: int) -> dict[str, Any
     return game_state
 
 
-def generate_v5_game(seed: int) -> dict[str, Any]:
-    """Generate one player-facing puzzle from the cached v5 runtime."""
-    runtime = initialize_v5_runtime()
-    puzzle = generate_puzzle_v5(
-        puzzle_id=f"play_v5_{seed:06d}",
+def generate_final_game(seed: int) -> dict[str, Any]:
+    """Generate one player-facing puzzle from the cached final runtime."""
+    runtime = initialize_v6_runtime()
+    puzzle = generate_puzzle_v6(
+        puzzle_id=f"play_final_{seed:06d}",
         rng=random.Random(seed),
         runtime=runtime,
     )
@@ -222,18 +217,18 @@ def share_summary(game_state: dict[str, Any]) -> str:
     """Build a lightweight share string once the game is finished."""
     solved_count = len(game_state["solved_group_ids"])
     mistakes_used = MISTAKE_LIMIT - int(game_state["mistakes_remaining"])
-    headline = f"Infinite Connections v5 {solved_count}/4 with {mistakes_used} mistake"
+    headline = f"Infinite Connections Final {solved_count}/4 with {mistakes_used} mistake"
 
     if mistakes_used != 1:
         headline += "s"
 
-    emoji_rows = []
+    emoji_rows: list[str] = []
 
     for guess in game_state["guess_history"]:
         if guess["result"] == "correct":
-            emoji_rows.append(RESULT_EMOJI.get(str(guess["color_name"]), "⬜"))
+            emoji_rows.append(RESULT_EMOJI.get(str(guess["color_name"]), RESULT_EMOJI["wrong"]))
         else:
-            emoji_rows.append(RESULT_EMOJI.get(str(guess["result"]), "⬜"))
+            emoji_rows.append(RESULT_EMOJI.get(str(guess["result"]), RESULT_EMOJI["wrong"]))
 
     if emoji_rows:
         return headline + "\n" + "".join(emoji_rows)

@@ -172,6 +172,64 @@ def load_semantic_bank() -> tuple[CategoryGroup, ...]:
     return tuple(dedupe_groups(groups))
 
 
+def semantic_group_signature(group: CategoryGroup) -> tuple[str, tuple[str, ...]]:
+    """Return a label-plus-word signature for semantic-bank overlap checks."""
+    return (
+        normalize_word_key(group["label"]),
+        tuple(sorted(normalize_word_key(word) for word in group["words"])),
+    )
+
+
+def semantic_word_signature(group: CategoryGroup) -> tuple[str, ...]:
+    """Return a word-only signature for semantic-bank overlap checks."""
+    return tuple(sorted(normalize_word_key(word) for word in group["words"]))
+
+
+@lru_cache(maxsize=1)
+def official_semantic_signatures() -> tuple[set[tuple[str, tuple[str, ...]]], set[tuple[str, ...]]]:
+    """Return normalized official NYT semantic signatures for duplicate detection."""
+    stats = load_official_stats_safe()
+    official_groups = [clone_group(group) for group in stats.get("category_banks", {}).get("semantic", [])]
+    full_signatures = {semantic_group_signature(group) for group in official_groups}
+    word_signatures = {semantic_word_signature(group) for group in official_groups}
+    return full_signatures, word_signatures
+
+
+def assert_semantic_bank_independent(groups: list[CategoryGroup]) -> None:
+    """Fail loudly when the independent semantic bank overlaps with official NYT data.
+
+    The final v6 workflow treats semantic-bank overlap as a submission blocker rather
+    than something to silently filter away.
+    """
+    official_full_signatures, official_word_signatures = official_semantic_signatures()
+    overlap_messages: list[str] = []
+
+    for group in groups:
+        full_signature = semantic_group_signature(group)
+        word_signature = semantic_word_signature(group)
+
+        if full_signature in official_full_signatures:
+            overlap_messages.append(f"exact semantic overlap: {group['label']} -> {group['words']}")
+        elif word_signature in official_word_signatures:
+            overlap_messages.append(f"semantic word-set overlap: {group['label']} -> {group['words']}")
+
+    if overlap_messages:
+        details = "; ".join(overlap_messages[:10])
+        raise RuntimeError(
+            "Independent semantic bank overlaps with the official NYT semantic bank. "
+            f"v6 final refuses to continue. Details: {details}"
+        )
+
+
+@lru_cache(maxsize=1)
+def load_independent_semantic_bank() -> tuple[CategoryGroup, ...]:
+    """Return only independently authored semantic groups and verify no NYT overlap."""
+    groups = [clone_group(group) for group in SEMANTIC_GROUPS]
+    deduped_groups = dedupe_groups(groups)
+    assert_semantic_bank_independent(deduped_groups)
+    return tuple(deduped_groups)
+
+
 @lru_cache(maxsize=1)
 def load_theme_bank() -> tuple[CategoryGroup, ...]:
     """Return theme groups from the dataset plus curated and fallback banks."""
