@@ -272,7 +272,6 @@ if generate_clicked:
         puzzles = generate_puzzles_v6_with_progress(
             count=int(requested_count),
             seed=int(seed),
-            runtime=runtime,
             progress_callback=on_progress,
         )
         generation_seconds = perf_counter() - generation_start
