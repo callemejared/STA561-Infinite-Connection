@@ -1,4 +1,4 @@
-"""Optional anagram-focused generator for v2 puzzle variety."""
+"""Optional anagram-focused generator retained for v4 compatibility."""
 
 from __future__ import annotations
 

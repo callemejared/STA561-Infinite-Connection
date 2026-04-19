@@ -145,6 +145,22 @@ def is_anagram_set(words: list[str]) -> bool:
     return len({"".join(sorted(key)) for key in keys}) == 1
 
 
+def count_alpha_patterns(words: list[str], width: int, kind: str) -> dict[str, int]:
+    """Count shared alphabetic prefixes or suffixes across the reusable word pool."""
+    counter: Counter[str] = Counter()
+
+    for word in words:
+        key = compact_key(word)
+
+        if not key.isalpha() or len(key) < width:
+            continue
+
+        pattern_value = key[:width] if kind == "prefix" else key[-width:]
+        counter.update([pattern_value])
+
+    return dict(counter)
+
+
 def infer_group_type(label: str, words: list[str]) -> str:
     """Infer a broad mechanism label for one official group."""
     label_text = normalize_text(label)
@@ -318,6 +334,9 @@ def collect_dataset_statistics(normalized_puzzles: list[dict[str, Any]]) -> dict
             mechanism_counter.update([str(group["type"])])
 
     category_banks = build_category_banks(normalized_puzzles)
+    word_pool = sorted(word_counter)
+    prefix3_frequency = count_alpha_patterns(word_pool, width=3, kind="prefix")
+    suffix3_frequency = count_alpha_patterns(word_pool, width=3, kind="suffix")
 
     return {
         "dataset_id": HF_DATASET_ID,
@@ -330,8 +349,15 @@ def collect_dataset_statistics(normalized_puzzles: list[dict[str, Any]]) -> dict
         "label_frequency": dict(label_counter),
         "top_words": [{"word": word, "count": count} for word, count in word_counter.most_common(30)],
         "top_labels": [{"label": label, "count": count} for label, count in label_counter.most_common(30)],
-        "word_pool": sorted(word_counter),
+        "word_pool": word_pool,
         "category_banks": category_banks,
+        "pattern_statistics": {
+            "alphabetic_word_pool_size": sum(1 for word in word_pool if compact_key(word).isalpha()),
+            "prefix3_frequency": prefix3_frequency,
+            "suffix3_frequency": suffix3_frequency,
+            "top_prefix3": [{"pattern": pattern, "count": count} for pattern, count in Counter(prefix3_frequency).most_common(25)],
+            "top_suffix3": [{"pattern": pattern, "count": count} for pattern, count in Counter(suffix3_frequency).most_common(25)],
+        },
     }
 
 

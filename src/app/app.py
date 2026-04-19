@@ -1,4 +1,4 @@
-"""Streamlit UI for browsing and generating Infinite Connections v2 puzzles."""
+"""Streamlit UI for browsing and generating Infinite Connections v4 puzzles."""
 
 from __future__ import annotations
 
@@ -17,13 +17,13 @@ if str(SRC_ROOT) not in sys.path:
 import streamlit as st
 
 from data_utils.dataset_loader import load_or_build_dataset_assets
-from generators.puzzle_assembler import generate_candidate_puzzle_v2
+from generators.puzzle_assembler import generate_candidate_puzzle_v4
 from validators.puzzle_validators import ValidationConfig, validate_puzzle
 
-ACCEPTED_PUZZLES_PATH = PROJECT_ROOT / "data" / "generated" / "accepted_v2.json"
+ACCEPTED_PUZZLES_PATH = PROJECT_ROOT / "data" / "generated" / "accepted_v4.json"
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 
-st.set_page_config(page_title="Infinite Connections v2", page_icon=":puzzle_piece:", layout="centered")
+st.set_page_config(page_title="Infinite Connections v4", page_icon=":puzzle_piece:", layout="centered")
 
 
 @st.cache_data(show_spinner=False)
@@ -38,7 +38,7 @@ def load_official_puzzles_for_validation() -> list[dict[str, Any]]:
 
 @st.cache_data(show_spinner=False)
 def load_saved_accepted_puzzles() -> list[dict[str, Any]]:
-    """Load accepted v2 puzzles from disk if present."""
+    """Load accepted v4 puzzles from disk if present."""
     if not ACCEPTED_PUZZLES_PATH.exists():
         return []
 
@@ -69,13 +69,13 @@ def choose_valid_generated_puzzle(seed: int) -> dict[str, Any]:
     validation_config = ValidationConfig()
 
     for attempt in range(250):
-        puzzle = generate_candidate_puzzle_v2(puzzle_id=f"ui_v2_{seed:06d}_{attempt:03d}", rng=rng)
+        puzzle = generate_candidate_puzzle_v4(puzzle_id=f"ui_v4_{seed:06d}_{attempt:03d}", rng=rng, seed=seed)
         validation = validate_puzzle(puzzle, official_puzzles=official_puzzles, config=validation_config)
 
         if validation["is_valid"]:
             return puzzle
 
-    raise RuntimeError("Could not generate a valid v2 puzzle for the UI after 250 attempts.")
+    raise RuntimeError("Could not generate a valid v4 puzzle for the UI after 250 attempts.")
 
 
 def load_library_puzzle(seed: int, mode: str, index: int | None) -> dict[str, Any] | None:
@@ -174,8 +174,8 @@ if library_mode == "By index":
         )
     )
 
-st.title("Infinite Connections v2")
-st.caption("A data-driven NYT-style generator for the STA561 course project.")
+st.title("Infinite Connections v4")
+st.caption("A data-driven NYT-style generator with v4 difficulty balancing and decoy-aware assembly.")
 
 control_columns = st.columns(3)
 
@@ -187,7 +187,7 @@ if control_columns[1].button("Load from Library", use_container_width=True):
     puzzle = load_library_puzzle(st.session_state["board_seed"], library_mode, library_index)
 
     if puzzle is None:
-        st.warning("No saved `accepted_v2.json` library was found yet.")
+        st.warning("No saved `accepted_v4.json` library was found yet.")
     else:
         source_label = f"Library puzzle ({library_mode.lower()})"
         store_puzzle_in_state(puzzle, st.session_state["board_seed"], source_label)
@@ -202,6 +202,11 @@ metadata_columns = st.columns(3)
 metadata_columns[0].metric("Puzzle ID", current_puzzle["puzzle_id"])
 metadata_columns[1].metric("Source", st.session_state.get("puzzle_source_label", current_puzzle["source"]))
 metadata_columns[2].metric("Saved library", len(accepted_library))
+
+if current_puzzle.get("difficulty"):
+    difficulty_columns = st.columns(2)
+    difficulty_columns[0].metric("Puzzle difficulty", f"{current_puzzle['difficulty']['puzzle_score']:.3f}")
+    difficulty_columns[1].metric("Tier mix", ", ".join(current_puzzle["difficulty"]["group_tiers"]))
 
 render_board(display_words)
 

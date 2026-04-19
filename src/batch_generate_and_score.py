@@ -1,4 +1,4 @@
-"""Batch-generate and validate v2 Infinite Connections puzzles."""
+"""Batch-generate and validate v4 Infinite Connections puzzles."""
 
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ from data_utils.dataset_loader import (
     DEFAULT_STATS_PATH,
     load_or_build_dataset_assets,
 )
-from generators.puzzle_assembler import generate_candidate_puzzle_v2
+from generators.puzzle_assembler import generate_candidate_puzzle_v4
 from validators.duplicate_check import canonicalize_puzzle
 from validators.puzzle_validators import ValidationConfig, first_failure_stage, validate_puzzle
 
-ACCEPTED_PUZZLES_PATH = Path("data/generated/accepted_v2.json")
-GENERATION_REPORT_PATH = Path("data/generated/generation_report_v2.json")
+ACCEPTED_PUZZLES_PATH = Path("data/generated/accepted_v4.json")
+GENERATION_REPORT_PATH = Path("data/generated/generation_report_v4.json")
 
 
 def save_json(payload: Any, output_path: Path) -> Path:
@@ -56,7 +56,7 @@ def generate_and_score_candidates(
     progress_every: int = 250,
     force_refresh_dataset: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Generate many puzzles and keep the ones that pass all v2 checks."""
+    """Generate many puzzles and keep the ones that pass all v4 checks."""
     official_puzzles, dataset_stats = load_official_dataset_assets(force_refresh_dataset=force_refresh_dataset)
     rng = Random(seed)
     accepted_puzzles: list[dict[str, Any]] = []
@@ -69,6 +69,8 @@ def generate_and_score_candidates(
     accepted_within_scores: list[float] = []
     accepted_cross_scores: list[float] = []
     accepted_solution_counts: list[int] = []
+    accepted_puzzle_difficulties: list[float] = []
+    accepted_interference_scores: list[float] = []
 
     report: dict[str, Any] = {
         "seed": seed,
@@ -83,6 +85,8 @@ def generate_and_score_candidates(
         "rejected_by_structure": 0,
         "rejected_by_style": 0,
         "rejected_by_ambiguity": 0,
+        "rejected_by_difficulty": 0,
+        "rejected_by_singleton": 0,
         "rejected_by_duplicate": 0,
         "rejected_by_multi_solution": 0,
         "rejected_by_low_cohesion": 0,
@@ -95,10 +99,10 @@ def generate_and_score_candidates(
 
     while candidate_index < num_candidates:
         candidate_index += 1
-        puzzle_id = f"gen_v2_{candidate_index:06d}"
+        puzzle_id = f"gen_v4_{candidate_index:06d}"
 
         try:
-            candidate_puzzle = generate_candidate_puzzle_v2(puzzle_id=puzzle_id, rng=rng)
+            candidate_puzzle = generate_candidate_puzzle_v4(puzzle_id=puzzle_id, rng=rng, seed=seed)
         except ValueError as exc:
             rejection_counts["generation_error"] += 1
             stage_reason_counts["generation_error"].update([str(exc)])
@@ -133,6 +137,8 @@ def generate_and_score_candidates(
         accepted_within_scores.append(validation_result["metrics"]["average_within_group_similarity"])
         accepted_cross_scores.append(validation_result["metrics"]["average_cross_group_similarity"])
         accepted_solution_counts.append(validation_result["metrics"]["solution_count"])
+        accepted_puzzle_difficulties.append(validation_result["metrics"]["puzzle_difficulty"])
+        accepted_interference_scores.append(validation_result["metrics"]["interference_score"])
 
         if target_accepted is not None and len(accepted_puzzles) >= target_accepted:
             report["target_met"] = True
@@ -148,6 +154,8 @@ def generate_and_score_candidates(
     report["rejected_by_structure"] = rejection_counts["structure"]
     report["rejected_by_style"] = rejection_counts["style"]
     report["rejected_by_ambiguity"] = rejection_counts["ambiguity"]
+    report["rejected_by_difficulty"] = rejection_counts["difficulty"]
+    report["rejected_by_singleton"] = rejection_counts["singleton"]
     report["rejected_by_duplicate"] = rejection_counts["duplicate"]
     report["rejected_by_multi_solution"] = rejection_counts["multi_solution"]
     report["rejected_by_low_cohesion"] = rejection_counts["low_cohesion"]
@@ -165,9 +173,17 @@ def generate_and_score_candidates(
     report["average_solution_count"] = (
         sum(accepted_solution_counts) / len(accepted_solution_counts) if accepted_solution_counts else 0.0
     )
+    report["average_puzzle_difficulty"] = (
+        sum(accepted_puzzle_difficulties) / len(accepted_puzzle_difficulties) if accepted_puzzle_difficulties else 0.0
+    )
+    report["average_interference_score"] = (
+        sum(accepted_interference_scores) / len(accepted_interference_scores) if accepted_interference_scores else 0.0
+    )
     report["top_structure_reasons"] = dict(stage_reason_counts["structure"].most_common(5))
     report["top_style_reasons"] = dict(stage_reason_counts["style"].most_common(5))
     report["top_ambiguity_reasons"] = dict(stage_reason_counts["ambiguity"].most_common(5))
+    report["top_difficulty_reasons"] = dict(stage_reason_counts["difficulty"].most_common(5))
+    report["top_singleton_reasons"] = dict(stage_reason_counts["singleton"].most_common(5))
     report["top_duplicate_reasons"] = dict(stage_reason_counts["duplicate"].most_common(5))
     report["top_multi_solution_reasons"] = dict(stage_reason_counts["multi_solution"].most_common(5))
     report["top_low_cohesion_reasons"] = dict(stage_reason_counts["low_cohesion"].most_common(5))
@@ -187,7 +203,7 @@ def choose_candidate_budget(num_candidates: int, target_accepted: int | None) ->
 
 def build_argument_parser() -> argparse.ArgumentParser:
     """Build the command-line parser."""
-    parser = argparse.ArgumentParser(description="Generate and score many Infinite Connections v2 puzzles.")
+    parser = argparse.ArgumentParser(description="Generate and score many Infinite Connections v4 puzzles.")
     parser.add_argument("--num-candidates", type=int, default=10000, help="Number of candidate puzzles to generate.")
     parser.add_argument(
         "--target-accepted",
@@ -275,10 +291,14 @@ def main() -> None:
     print(f"Rejected by structure validation: {report['rejected_by_structure']}")
     print(f"Rejected by style validation: {report['rejected_by_style']}")
     print(f"Rejected by ambiguity validation: {report['rejected_by_ambiguity']}")
+    print(f"Rejected by difficulty profile validation: {report['rejected_by_difficulty']}")
+    print(f"Rejected by singleton-word validation: {report['rejected_by_singleton']}")
     print(f"Rejected by duplicate check: {report['rejected_by_duplicate']}")
     print(f"Rejected by multi-solution check: {report['rejected_by_multi_solution']}")
     print(f"Rejected by low cohesion: {report['rejected_by_low_cohesion']}")
     print(f"Rejected by high confusion: {report['rejected_by_high_confusion']}")
+    print(f"Average puzzle difficulty: {report['average_puzzle_difficulty']:.3f}")
+    print(f"Average interference score: {report['average_interference_score']:.3f}")
     print(f"Rejected by internal repeat: {report['rejected_by_internal_repeat']}")
     print(f"Saved accepted puzzles to {accepted_path}.")
     print(f"Saved generation report to {report_path}.")

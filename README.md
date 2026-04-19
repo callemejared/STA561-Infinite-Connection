@@ -4,169 +4,312 @@
 
 This repository contains the STA561 **Infinite Connections** project: a generator for NYT-style Connections puzzles.
 
-The original v1.0 pipeline is still present, but the main workflow now targets a more data-driven **v3.0** pipeline built on the earlier v2 architecture. It:
+The active workflow is now the **v4** pipeline. It keeps the v3 repository structure, but extends the existing loader, generators, assembler, validator, batch runner, and Streamlit app so puzzles have:
 
-- ingests the HuggingFace `tm21cy/NYT-Connections` dataset,
-- derives category banks and dataset statistics from official puzzles,
-- mixes multiple generation mechanisms,
-- validates puzzles for structure, duplication, ambiguity, multi-solution risk, and cohesion/confusion,
-- batch-generates a library of accepted puzzles,
-- and serves them in a Streamlit UI.
+- stronger difficulty calibration,
+- deliberate but controlled misleadingness,
+- phoneme-level rhyme handling,
+- earlier rejection of trivial form groups,
+- and unified v4 naming for generation functions and outputs.
 
-## What v3.0 Adds
+## v4 Architecture
 
-The v3 pipeline extends the repo without removing the earlier MVP pieces.
+The v4 pipeline still follows the same high-level flow:
 
-- `src/data_utils/dataset_loader.py`
-  Downloads or reads the HuggingFace dataset, normalizes each record into the shared internal schema, and saves:
-  - `data/processed/nyt_official.json`
-  - `data/processed/nyt_dataset_stats.json`
-- `src/generators/semantic_generator.py`
-  Uses dataset-derived semantic banks and an optional WordNet fallback.
-- `src/generators/theme_generator.py`
-  Uses dataset-derived theme groups plus a small curated theme bank.
-- `src/generators/form_generator.py`
-  Uses dataset-derived form categories plus generated prefix/suffix groups and a few curated rhyme/homophone sets.
-- `src/generators/anagram_generator.py`
-  Adds optional anagram-specific groups for variety.
-- `src/generators/puzzle_assembler.py`
-  Adds `generate_candidate_puzzle_v2(...)` and enforces mechanism variety.
-- `src/validators/puzzle_validators.py`
-  Adds a backtracking uniqueness check and similarity-based cohesion/confusion scoring.
-- `src/batch_generate_and_score.py`
-  Batch-generates and validates candidate puzzles, and can now generate until a target accepted-count is reached.
-- `src/app/app.py`
-  Loads puzzles from `accepted_v2.json` or generates one live on demand.
+1. `src/data_utils/dataset_loader.py`
+   Loads the HuggingFace `tm21cy/NYT-Connections` dataset, normalizes it into the shared schema, builds reusable category banks, and now also persists pattern-frequency statistics for the word pool.
+2. `src/generators/generator_resources.py`
+   Loads the reusable banks and word pool, reads the external form-pattern blacklist, exposes WordNet/pronouncing helpers, and provides shared scoring/filtering utilities.
+3. `src/generators/semantic_generator.py`, `theme_generator.py`, `form_generator.py`
+   Build and prefilter candidate groups, attach normalized v4 difficulty metadata, and reject self-revealing or overly ambiguous candidates before assembly.
+4. `src/generators/similarity_tools.py`
+   Provides pretrained-vector similarity through `gensim` GloVe embeddings, with a lexical fallback if embeddings are unavailable.
+5. `src/generators/puzzle_analysis.py`
+   Computes puzzle-level difficulty, decoys, ambiguity signals, singleton-word risk, and cross-group interference.
+6. `src/generators/puzzle_assembler.py`
+   Assembles four groups under difficulty-tier, misleadingness, rhyme-ending, and ambiguity constraints using seeded randomness.
+7. `src/validators/puzzle_validators.py`
+   Re-validates structure, style, ambiguity, difficulty profile, singleton-word checks, duplicate risk, multi-solution risk, and similarity metrics.
+8. `src/batch_generate_and_score.py`
+   Batch-generates accepted puzzles into `accepted_v4.json` with a corresponding `generation_report_v4.json`.
+9. `src/app/app.py`
+   Loads `accepted_v4.json` or generates a fresh v4 puzzle in Streamlit.
 
-## Dataset Usage
+## Data Loading And Resources
 
-The v3 loader targets the HuggingFace dataset:
+The loader still writes:
 
-- Dataset: `tm21cy/NYT-Connections`
-- Source file: `ConnectionsFinalDataset.json`
-- Normalized output: `data/processed/nyt_official.json`
-- Statistics output: `data/processed/nyt_dataset_stats.json`
+- `data/processed/nyt_official.json`
+- `data/processed/nyt_dataset_stats.json`
 
-Each normalized puzzle uses the shared schema:
+v4 extends the saved statistics with `pattern_statistics`, including reusable prefix and suffix counts over the alphabetic word pool. Those stats support the new form-group rarity filtering and README-visible reporting.
 
-```json
-{
-  "puzzle_id": "nyt_0358",
-  "source": "nyt_official",
-  "groups": [
-    {
-      "label": "REMOVE, AS BODY HAIR",
-      "type": "semantic",
-      "words": ["LASER", "PLUCK", "THREAD", "WAX"]
-    }
-  ],
-  "all_words": ["LASER", "PLUCK", "THREAD", "WAX", "..."]
-}
+The form generator also loads an external blacklist from:
+
+- `data/raw/form_pattern_blacklist.txt`
+
+Patterns in that file, or any spelling/phonetic pattern covering more than 30% of the reusable word pool, are treated as too broad and filtered out before puzzle assembly. This prevents trivial groups such as words that all begin with a meaningless high-frequency chunk.
+
+## Group Generation
+
+### Semantic Groups
+
+Semantic groups come from the official semantic bank plus curated fallback banks. v4 rejects a semantic candidate if:
+
+- it repeats a word,
+- its label directly reveals one of its words,
+- or two or more words also collapse into a broad alternate category such as `person`, `animal`, `food`, `place`, `plant`, or `body_part`.
+
+**Difficulty metric:** WordNet concept specificity.
+
+For each semantic label, v4 looks up noun synsets in WordNet and uses the minimum hypernym depth (`synset.min_depth()`) as a specificity signal. Deeper concepts are treated as harder. The raw depths are normalized across the semantic bank and mapped into `easy`, `medium`, and `hard`.
+
+### Form Groups
+
+Form groups come from:
+
+- the official form bank,
+- curated fallback form groups,
+- dynamic shared-prefix groups,
+- dynamic shared-suffix groups,
+- phoneme-level rhyme groups,
+- and phoneme-level homophone groups.
+
+v4 filters form groups if:
+
+- the spelling/phonetic pattern is blacklisted,
+- the pattern covers more than 30% of the word pool,
+- the group is self-revealing,
+- the group reuses a rhyme ending already chosen for the same puzzle,
+- or the words also create an overly broad alternate category.
+
+**Difficulty metric:** pattern rarity.
+
+The fewer words in the reusable word pool that match the group’s pattern, the higher the difficulty. v4 stores the match count, coverage ratio, normalized difficulty score, and tier for every form group.
+
+### Theme Groups
+
+Theme groups still come from the official theme bank plus curated fallbacks, but they now receive the same ambiguity/self-reveal prefilters as semantic groups.
+
+**Difficulty metric:** distractibility.
+
+At load time, v4 estimates how many outside words in the full reusable word pool still point toward the theme label. During assembly, that score is adjusted again using the actual 12 outside words in the current 16-word puzzle. Themes with more outside associations are treated as harder because they create more plausible false leads.
+
+## Word Vectors And Decoys
+
+v4 deliberately adds misleadingness during assembly instead of treating all cross-group similarity as a bug.
+
+`src/generators/similarity_tools.py` uses pretrained GloVe word vectors via `gensim.downloader`:
+
+- backend: `glove-wiki-gigaword-50`
+- fallback: lexical token/trigram similarity if embeddings cannot be loaded
+
+These vectors are used to:
+
+- compare a word to its own label and competing labels,
+- identify decoy words that also fit another group’s label,
+- estimate theme distractibility,
+- detect over-ambiguous assignments,
+- and reject singleton words that have no meaningful cross-group hook.
+
+During assembly, v4 prefers combinations where every group has at least one word that looks plausible under another group’s label, but it penalizes combinations where too many words fit the wrong label more strongly than the intended one.
+
+## WordNet Specificity
+
+Semantic difficulty relies on the WordNet hypernym/hyponym “is-a” hierarchy:
+
+- shallow nodes are more general,
+- deeper nodes are more specific,
+- and more specific labels are treated as harder.
+
+This is why v4 uses `min_depth()` from the label’s noun synsets: it is a compact proxy for concept professionalism/specificity.
+
+If WordNet is unavailable, the code degrades gracefully, but for best results install the corpus data with:
+
+```bash
+python -m nltk.downloader wordnet omw-1.4
 ```
 
-The stats file stores:
+## Pronouncing / CMU Dictionary Rhyme Logic
 
-- word frequency counts,
-- category label frequency counts,
-- inferred mechanism counts,
-- a reusable word pool,
-- and category banks split into `semantic`, `theme`, and `form`.
+v4 uses the `pronouncing` library, which wraps the CMU Pronouncing Dictionary, so rhyme groups are based on phoneme endings rather than spelling.
 
-## Generator Mechanisms
+That means differently spelled words with the same sound can still be grouped together.
 
-v3 puzzle assembly mixes four groups with a variety constraint: every puzzle must include at least one `semantic` group and at least one `theme` group, plus additional `form` or `anagram` groups.
+Example:
 
-Current mechanism modules:
+```python
+import pronouncing
 
-- `semantic`
-  Uses official dataset categories and can optionally try WordNet if available.
-- `theme`
-  Uses official theme-like labels plus a curated bank such as cities, monsters, foods, and event contexts.
-- `form`
-  Uses official wordplay-style groups and dynamic shared-prefix/shared-suffix groups.
-- `anagram`
-  Uses explicit anagram sets to increase mechanism diversity.
+for word in ["ell", "el"]:
+    phones = pronouncing.phones_for_word(word)
+    print(word, phones, pronouncing.rhyming_part(phones[0]))
+```
+
+In v4, rhyme generation works like this:
+
+- look up pronunciations with `pronouncing.phones_for_word(...)`,
+- derive the rhyme ending with `pronouncing.rhyming_part(...)`,
+- bucket candidate words by that phoneme suffix,
+- require the visible rhyme target in the label to be absent from the actual group,
+- and lower the sampling weight of high-frequency rhyme endings.
+
+The assembler also forbids two rhyme groups with the same phoneme ending from appearing in one puzzle.
+
+## Puzzle Assembly
+
+`src/generators/puzzle_assembler.py` now exposes:
+
+- `generate_candidate_puzzle_v4(...)`
+- `generate_candidate_puzzles_v4(...)`
+
+Assembly is seeded and deterministic with respect to sampling order.
+
+Each candidate puzzle must satisfy all of the following before it is returned:
+
+- exactly 4 groups with no repeated words,
+- difficulty-tier coverage across `easy`, `medium`, and `hard`,
+- puzzle-average difficulty inside a fixed interval,
+- at least one easiest-tier group and one hardest-tier group,
+- no repeated rhyme ending across rhyme groups,
+- every group must contain at least one decoy word,
+- no self-revealing group,
+- no word that is more strongly pulled to the wrong label by too large a margin,
+- and no singleton word with no plausible cross-group link.
+
+The assembler does not simply pick groups independently. It scores candidate combinations by:
+
+- embedding similarity from words to competing labels,
+- pattern-match spillover into other groups,
+- cross-word similarity across groups,
+- ambiguity risk penalties,
+- and a small seeded random component.
+
+That makes the final puzzles more misleading than v3, but still keeps them playable.
 
 ## Validation
 
-The v3 validator keeps the earlier lightweight checks and adds stronger filters:
+`src/validators/puzzle_validators.py` still checks structure, duplication, solver uniqueness, and similarity metrics, but v4 adds explicit checks for:
 
-- `validate_structure`
-  Requires exactly 4 groups, 4 words per group, 16 total words, and no repeated words.
-- `validate_style`
-  Rejects labels that are generic, repeated, or too revealing.
-- `validate_ambiguity_and_overlap`
-  Rejects obvious cross-group surface conflicts.
-- `exact_duplicate_check`
-  Rejects exact duplicates of official puzzles.
-- `solve_puzzle_backtracking`
-  Searches valid 4-word partitions using the generator banks and counts how many full puzzle solutions exist.
-- `embedding_score`
-  Computes average within-group and cross-group similarity.
-  If a spaCy model is installed, it will use that; otherwise it falls back to a lightweight lexical plus dataset-context representation.
-- `validate_puzzle`
-  Combines all checks and returns detailed rejection reasons and metrics.
+- difficulty-tier coverage and puzzle difficulty range,
+- decoy presence for all four groups,
+- label-based ambiguity using embedding similarity,
+- singleton-word rejection,
+- and updated high-confusion tolerance consistent with the new decoy-aware design.
+
+The validator returns detailed `reason_groups` and metrics such as:
+
+- `puzzle_difficulty`
+- `interference_score`
+- `decoy_group_count`
+- `ambiguous_word_count`
+- `singleton_word_count`
+- `average_within_group_similarity`
+- `average_cross_group_similarity`
 
 ## Batch Generation
 
-Default output files:
+Default v4 outputs:
 
-- `data/generated/accepted_v2.json`
-- `data/generated/generation_report_v2.json`
+- `data/generated/accepted_v4.json`
+- `data/generated/generation_report_v4.json`
 
-The batch script now supports:
+Example:
 
+```bash
+python src/batch_generate_and_score.py --target-accepted 100 --num-candidates 250 --seed 561
+```
+
+Useful flags:
+
+- `--seed`
 - `--num-candidates`
 - `--target-accepted`
-- `--seed`
 - `--within-threshold`
 - `--cross-threshold`
 - `--max-solutions`
 - `--progress-every`
 - `--force-refresh-dataset`
+- `--accepted-output`
+- `--report-output`
 
-Example:
+The `--seed` argument controls the v4 sampling order, so rerunning with the same seed and the same resource state produces reproducible candidate selection behavior.
+
+## Streamlit App
+
+Launch the app with:
 
 ```bash
-python src/batch_generate_and_score.py --target-accepted 10000 --num-candidates 13000 --seed 561
+streamlit run src/app/app.py
 ```
 
-## Streamlit UI
+The app can:
 
-The UI supports two puzzle sources:
+- generate a fresh validated v4 puzzle,
+- load a puzzle from `accepted_v4.json`,
+- reveal answers with group types,
+- and show the stored puzzle-level difficulty summary.
 
-- `Generate New Puzzle`
-  Generates a fresh v3 puzzle and validates it before display.
-- `Load from Library`
-  Loads a puzzle from `data/generated/accepted_v2.json`, either randomly or by index.
+## How To Run
 
-The board is shown as a 4x4 grid, and revealed answers are color-coded in NYT-style yellow, green, blue, and purple.
-
-## How to Run
-
-Install the current project dependency set:
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Build the official dataset assets:
+Build or refresh the normalized dataset assets:
 
 ```bash
 python src/data_utils/dataset_loader.py
 ```
 
-Generate the 10K accepted puzzle library:
+Generate a v4 library:
 
 ```bash
-python src/batch_generate_and_score.py --target-accepted 10000 --num-candidates 13000 --seed 561
+python src/batch_generate_and_score.py --target-accepted 100 --num-candidates 250 --seed 561
 ```
 
-Launch the app:
+Start Streamlit:
 
 ```bash
 streamlit run src/app/app.py
 ```
+
+## v3 vs v4
+
+Main differences from v3:
+
+- v3 mixed banked groups and simple validation; v4 adds typed difficulty scoring, tier balancing, and puzzle-level difficulty control.
+- v3 form groups relied mostly on string patterns; v4 adds blacklist-based triviality filtering, pool-wide coverage checks, and CMU/phoneme-based rhyme detection through `pronouncing`.
+- v3 treated cross-group similarity mostly as a rejection signal; v4 deliberately constructs decoys with pretrained word vectors, then rejects only the combinations that become unfairly ambiguous.
+- v3 had limited rhyme handling and could reuse the same ending across one puzzle; v4 tracks rhyme endings and suppresses repeated endings.
+- v3 did not explicitly reject singleton words; v4 validates that every word has some plausible cross-group distraction.
+- v3 still exposed v2-oriented naming in several interfaces; v4 standardizes function names, output names, logs, and app/library references around `v4`.
+
+## Files Added Or Modified Under `src/`
+
+Added under `src/`:
+
+- `src/generators/similarity_tools.py`
+- `src/generators/puzzle_analysis.py`
+
+Modified under `src/`:
+
+- `src/data_utils/dataset_loader.py`
+- `src/generators/anagram_generator.py`
+- `src/generators/form_generator.py`
+- `src/generators/generator_resources.py`
+- `src/generators/puzzle_assembler.py`
+- `src/generators/semantic_generator.py`
+- `src/generators/theme_generator.py`
+- `src/validators/puzzle_validators.py`
+- `src/batch_generate_and_score.py`
+- `src/app/app.py`
+
+Related non-`src/` resource added:
+
+- `data/raw/form_pattern_blacklist.txt`
 
 ## Repository Structure
 
@@ -189,31 +332,3 @@ src/
   load_data.py
   pipeline_demo.py
 ```
-
-## v3 Library Snapshot
-
-The checked-in `generation_report_v2.json` now comes from a full library-generation run with seed `561`:
-
-- candidate budget: 20,000
-- generated until target reached: 12,399
-- accepted: 10,000
-- target met: `True`
-- acceptance rate: 80.65%
-- rejected by structure: 122
-- rejected by style: 861
-- rejected by ambiguity: 969
-- rejected by low cohesion: 447
-- average within-group similarity of accepted puzzles: about `0.339`
-- average cross-group similarity of accepted puzzles: about `0.003`
-
-## Limitations
-
-- The generator is still heuristic and bank-based, even though it is now data-driven.
-- `solve_puzzle_backtracking` only searches solutions expressible through the current generator banks and pattern detectors, so it may still miss some alternate human-valid partitions.
-- The similarity scorer uses a lightweight fallback when spaCy vectors are unavailable, so cohesion estimates are only approximate.
-- Theme versus semantic labels are inferred heuristically from official labels, not hand-annotated.
-- Puzzle quality is improved, but not guaranteed to meet the course's strongest human-evaluation target without manual review.
-
-## Compatibility Note
-
-The earlier v1 files and schema are still present so the original submission pipeline is not broken. The v3 workflow is additive and still uses the assignment-compatible outputs `nyt_official.json`, `accepted_v2.json`, and `generation_report_v2.json`.

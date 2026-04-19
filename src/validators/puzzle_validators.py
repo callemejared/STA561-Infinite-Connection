@@ -1,8 +1,7 @@
-"""Validators for v1 and v2 Infinite Connections puzzles."""
+"""Validators for v4 Infinite Connections puzzles."""
 
 from __future__ import annotations
 
-import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -10,6 +9,9 @@ from functools import lru_cache
 from itertools import combinations
 from typing import Any
 
+from generators.generator_resources import revealing_label_overlap, rhyme_group_contains_target
+from generators.puzzle_analysis import MIN_INTERFERENCE_SCORE, PUZZLE_DIFFICULTY_RANGE, analyze_puzzle_groups
+from generators.similarity_tools import normalize_compact, normalize_phrase, text_similarity
 from validators.duplicate_check import is_duplicate_of_official
 
 GENERIC_LABELS = {
@@ -54,6 +56,8 @@ VALIDATION_STAGES = (
     "structure",
     "style",
     "ambiguity",
+    "difficulty",
+    "singleton",
     "duplicate",
     "multi_solution",
     "low_cohesion",
@@ -63,23 +67,14 @@ VALIDATION_STAGES = (
 
 @dataclass(frozen=True)
 class ValidationConfig:
-    """Configurable thresholds for v2 validation."""
+    """Configurable thresholds for v4 validation."""
 
     within_group_similarity_threshold: float = 0.18
-    cross_group_similarity_threshold: float = 0.16
+    cross_group_similarity_threshold: float = 0.28
     max_solution_count: int = 1
-
-
-def normalize_phrase(text: Any) -> str:
-    """Return uppercase text with punctuation collapsed into spaces."""
-    letters_only = re.sub(r"[^A-Z0-9]+", " ", str(text).upper())
-    return " ".join(letters_only.split())
-
-
-def normalize_compact(text: Any) -> str:
-    """Return uppercase text with spaces and punctuation removed."""
-    compact = re.sub(r"[^A-Z0-9]+", "", str(text).upper())
-    return compact or normalize_phrase(text).replace(" ", "")
+    min_puzzle_difficulty: float = PUZZLE_DIFFICULTY_RANGE[0]
+    max_puzzle_difficulty: float = PUZZLE_DIFFICULTY_RANGE[1]
+    min_interference_score: float = MIN_INTERFERENCE_SCORE
 
 
 def singularize(token: str) -> str:
@@ -121,11 +116,11 @@ def describe_surface_feature(feature_key: str) -> str:
     """Turn a feature key into a short human-readable description."""
     feature_type, feature_value = feature_key.split(":", maxsplit=1)
 
-    if feature_type == "prefix2":
+    if feature_type.startswith("prefix"):
         return f"start with '{feature_value}'"
-    if feature_type == "prefix3":
-        return f"start with '{feature_value}'"
-    return f"end with '{feature_value}'"
+    if feature_type.startswith("suffix"):
+        return f"end with '{feature_value}'"
+    return f"match pattern '{feature_value}'"
 
 
 def flatten_group_words(puzzle: dict[str, Any]) -> list[str]:
@@ -175,6 +170,24 @@ def validate_structure(puzzle: dict[str, Any]) -> list[str]:
     return dedupe_reasons(reasons)
 
 
+def sequence_similarity(left: str, right: str) -> float:
+    """Compute a lightweight string similarity score."""
+    left_bigrams = Counter(left[index : index + 2] for index in range(max(len(left) - 1, 1)))
+    right_bigrams = Counter(right[index : index + 2] for index in range(max(len(right) - 1, 1)))
+
+    if not left_bigrams or not right_bigrams:
+        return 0.0
+
+    dot_product = sum(left_bigrams[key] * right_bigrams.get(key, 0) for key in left_bigrams)
+    left_norm = sum(value * value for value in left_bigrams.values()) ** 0.5
+    right_norm = sum(value * value for value in right_bigrams.values()) ** 0.5
+
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+
+    return dot_product / (left_norm * right_norm)
+
+
 def validate_style(puzzle: dict[str, Any]) -> list[str]:
     """Reject labels that are overly generic or too revealing."""
     reasons: list[str] = []
@@ -196,18 +209,11 @@ def validate_style(puzzle: dict[str, Any]) -> list[str]:
                 reasons.append(f"group {group_index} label '{label}' is too generic")
                 break
 
-        group_type = str(group.get("type", "")).upper()
+        if revealing_label_overlap(group):
+            reasons.append(f"group {group_index} label '{label}' is too revealing for its words")
 
-        if group_type not in FORM_LIKE_TYPES:
-            revealing_tokens = [token for token in label_tokens(label) if len(token) >= 4]
-
-            for word in group.get("words", []):
-                normalized_word = normalize_compact(word)
-                if any(token == normalized_word or token in normalized_word for token in revealing_tokens):
-                    reasons.append(
-                        f"group {group_index} label '{label}' is too revealing because it appears in '{word}'"
-                    )
-                    break
+        if rhyme_group_contains_target(group):
+            reasons.append(f"group {group_index} rhyme label '{label}' contains its own rhyme target")
 
     labels = [str(group.get("label", "")).strip() for group in groups]
 
@@ -240,13 +246,6 @@ def validate_style(puzzle: dict[str, Any]) -> list[str]:
                 reasons.append(f"labels '{left_label}' and '{right_label}' are too similar")
 
     return dedupe_reasons(reasons)
-
-
-def sequence_similarity(left: str, right: str) -> float:
-    """Compute a lightweight string similarity score."""
-    left_bigrams = Counter(left[index : index + 2] for index in range(max(len(left) - 1, 1)))
-    right_bigrams = Counter(right[index : index + 2] for index in range(max(len(right) - 1, 1)))
-    return cosine_counter_similarity(left_bigrams, right_bigrams)
 
 
 def estimate_cross_group_confusion(puzzle: dict[str, Any]) -> tuple[int, list[str]]:
@@ -285,7 +284,15 @@ def estimate_cross_group_confusion(puzzle: dict[str, Any]) -> tuple[int, list[st
 
 
 def validate_ambiguity_and_overlap(puzzle: dict[str, Any]) -> list[str]:
-    """Reject puzzles with obvious alternate surface groupings."""
+    """Reject puzzles with obvious alternate surface groupings or label ambiguity."""
+    reasons = _surface_ambiguity_reasons(puzzle)
+    analysis = analyze_puzzle_groups([{**group, "words": list(group.get("words", []))} for group in puzzle.get("groups", [])])
+    reasons.extend(_ambiguity_reasons_from_analysis(analysis))
+    return dedupe_reasons(reasons)
+
+
+def _surface_ambiguity_reasons(puzzle: dict[str, Any]) -> list[str]:
+    """Return only the surface-pattern ambiguity reasons for one puzzle."""
     reasons: list[str] = []
 
     for group_index, group in enumerate(puzzle.get("groups", []), start=1):
@@ -296,7 +303,7 @@ def validate_ambiguity_and_overlap(puzzle: dict[str, Any]) -> list[str]:
 
         if len(normalized_words) == 4 and all(len(word) >= 4 for word in normalized_words):
             prefix2_values = {word[:2] for word in normalized_words}
-            suffix3_values = {word[-3:] for word in normalized_words if len(word) >= 5}
+            suffix3_values = {word[-3:] for word in normalized_words} if all(len(word) >= 5 for word in normalized_words) else set()
 
             if len(prefix2_values) == 1:
                 reasons.append(
@@ -315,6 +322,67 @@ def validate_ambiguity_and_overlap(puzzle: dict[str, Any]) -> list[str]:
         )
         reasons.extend(confusion_notes[:2])
 
+    return reasons
+
+
+def _ambiguity_reasons_from_analysis(analysis: dict[str, Any]) -> list[str]:
+    """Convert puzzle-analysis ambiguity findings into rejection reasons."""
+    reasons: list[str] = []
+
+    for ambiguous_word in analysis["ambiguous_words"][:4]:
+        reasons.append(
+            f"word '{ambiguous_word['word']}' fits '{ambiguous_word['competing_label']}' "
+            f"more strongly than its own label '{ambiguous_word['own_label']}'"
+        )
+
+    return reasons
+
+
+def validate_difficulty_profile(puzzle: dict[str, Any], config: ValidationConfig) -> list[str]:
+    """Check v4 tier coverage, average difficulty, and decoy pressure."""
+    analysis = analyze_puzzle_groups([{**group, "words": list(group.get("words", []))} for group in puzzle.get("groups", [])])
+    return _difficulty_reasons_from_analysis(analysis, config)
+
+
+def _difficulty_reasons_from_analysis(analysis: dict[str, Any], config: ValidationConfig) -> list[str]:
+    """Convert puzzle-analysis difficulty findings into rejection reasons."""
+    reasons: list[str] = []
+
+    if not analysis["covers_all_tiers"]:
+        reasons.append("puzzle must contain at least one easy, one medium, and one hard group")
+
+    puzzle_difficulty = float(analysis["puzzle_difficulty"])
+
+    if puzzle_difficulty < config.min_puzzle_difficulty or puzzle_difficulty > config.max_puzzle_difficulty:
+        reasons.append(
+            f"puzzle difficulty ({puzzle_difficulty:.3f}) is outside the allowed range "
+            f"({config.min_puzzle_difficulty:.3f}-{config.max_puzzle_difficulty:.3f})"
+        )
+
+    if analysis["decoy_group_count"] < 4:
+        reasons.append("each group must contain at least one decoy word that points toward another label")
+
+    if analysis["interference_score"] < config.min_interference_score:
+        reasons.append(
+            f"cross-group interference score ({analysis['interference_score']:.3f}) is below the minimum "
+            f"({config.min_interference_score:.3f})"
+        )
+
+    return reasons
+
+
+def validate_singleton_words(puzzle: dict[str, Any]) -> list[str]:
+    """Reject puzzles that contain words with no plausible cross-group hook."""
+    analysis = analyze_puzzle_groups([{**group, "words": list(group.get("words", []))} for group in puzzle.get("groups", [])])
+    return _singleton_reasons_from_analysis(analysis)
+
+
+def _singleton_reasons_from_analysis(analysis: dict[str, Any]) -> list[str]:
+    """Convert singleton-word findings into rejection reasons."""
+    reasons = [
+        f"word '{item['word']}' is too isolated and creates a singleton-word effect"
+        for item in analysis["singleton_words"][:6]
+    ]
     return dedupe_reasons(reasons)
 
 
@@ -338,12 +406,7 @@ def known_group_lookup() -> dict[tuple[str, ...], list[dict[str, Any]]]:
     from generators.theme_generator import list_theme_groups
 
     lookup: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
-    group_sources = (
-        list_semantic_groups()
-        + list_theme_groups()
-        + list_form_groups()
-        + list_anagram_groups()
-    )
+    group_sources = list_semantic_groups() + list_theme_groups() + list_form_groups() + list_anagram_groups()
 
     for group in group_sources:
         key = tuple(sorted(normalize_compact(word) for word in group["words"]))
@@ -354,34 +417,6 @@ def known_group_lookup() -> dict[tuple[str, ...], list[dict[str, Any]]]:
         lookup[key].append(group)
 
     return dict(lookup)
-
-
-@lru_cache(maxsize=1)
-def official_word_contexts() -> dict[str, tuple[str, ...]]:
-    """Map each official word to the labels it has appeared under."""
-    try:
-        from data_utils.dataset_loader import load_or_build_dataset_assets
-    except Exception:
-        return {}
-
-    try:
-        official_puzzles, _ = load_or_build_dataset_assets()
-    except Exception:
-        return {}
-
-    label_map: dict[str, set[str]] = defaultdict(set)
-
-    for puzzle in official_puzzles:
-        for group in puzzle.get("groups", []):
-            label = str(group.get("label", ""))
-
-            for word in group.get("words", []):
-                label_map[normalize_compact(word)].add(label)
-
-    return {
-        word_key: tuple(sorted(labels))
-        for word_key, labels in label_map.items()
-    }
 
 
 def solve_puzzle_backtracking(
@@ -436,142 +471,32 @@ def solve_puzzle_backtracking(
     return count_solutions(tuple(range(len(all_words))))
 
 
-def load_spacy_model() -> tuple[Any | None, str]:
-    """Try to load a lightweight spaCy model, returning None on failure."""
-    if hasattr(load_spacy_model, "_cached_value"):
-        return getattr(load_spacy_model, "_cached_value")
-
-    try:
-        import spacy
-    except Exception:
-        cached_value = (None, "lexical-fallback")
-        setattr(load_spacy_model, "_cached_value", cached_value)
-        return cached_value
-
-    for model_name in ("en_core_web_md", "en_core_web_sm"):
-        try:
-            cached_value = (spacy.load(model_name), model_name)
-            setattr(load_spacy_model, "_cached_value", cached_value)
-            return cached_value
-        except Exception:
-            continue
-
-    cached_value = (None, "lexical-fallback")
-    setattr(load_spacy_model, "_cached_value", cached_value)
-    return cached_value
-
-
-def lexical_vector(text: str) -> Counter[str]:
-    """Build a tiny n-gram vector when a spaCy model is unavailable."""
-    features: Counter[str] = Counter()
-    normalized = normalize_phrase(text)
-    compact = normalize_compact(text)
-
-    for token in normalized.split():
-        features[f"token:{token}"] += 1
-
-    for label in official_word_contexts().get(compact, ()):
-        features[f"label:{normalize_phrase(label)}"] += 3
-
-        for token in label_tokens(label):
-            features[f"label_token:{token}"] += 1
-
-    if len(compact) < 3:
-        if compact:
-            features[f"gram:{compact}"] += 1
-        return features
-
-    for index in range(len(compact) - 2):
-        features[f"gram:{compact[index:index + 3]}"] += 1
-
-    return features
-
-
-def cosine_counter_similarity(left: Counter[str], right: Counter[str]) -> float:
-    """Compute cosine similarity for sparse Counter vectors."""
-    if not left or not right:
-        return 0.0
-
-    dot_product = sum(left[key] * right.get(key, 0) for key in left)
-    left_norm = math.sqrt(sum(value * value for value in left.values()))
-    right_norm = math.sqrt(sum(value * value for value in right.values()))
-
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-
-    return dot_product / (left_norm * right_norm)
-
-
-def cosine_dense_similarity(left: list[float], right: list[float]) -> float:
-    """Compute cosine similarity for dense numeric vectors."""
-    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
-    left_norm = math.sqrt(sum(value * value for value in left))
-    right_norm = math.sqrt(sum(value * value for value in right))
-
-    if left_norm == 0 or right_norm == 0:
-        return 0.0
-
-    return dot_product / (left_norm * right_norm)
-
-
-@lru_cache(maxsize=4096)
-def vectorize_text(text: str) -> tuple[str, Counter[str] | list[float]]:
-    """Vectorize one word or phrase using spaCy if available."""
-    nlp, backend_name = load_spacy_model()
-
-    if nlp is None:
-        return backend_name, lexical_vector(text)
-
-    document = nlp(text)
-    vector = [float(value) for value in document.vector]
-
-    if not vector or math.isclose(sum(value * value for value in vector), 0.0):
-        return "lexical-fallback", lexical_vector(text)
-
-    return backend_name, vector
-
-
-@lru_cache(maxsize=8192)
-def pairwise_similarity(left: str, right: str) -> tuple[str, float]:
-    """Return the backend name and cosine similarity for one pair of words."""
-    left_backend, left_vector = vectorize_text(left)
-    right_backend, right_vector = vectorize_text(right)
-
-    if isinstance(left_vector, Counter) or isinstance(right_vector, Counter):
-        left_counter = left_vector if isinstance(left_vector, Counter) else lexical_vector(left)
-        right_counter = right_vector if isinstance(right_vector, Counter) else lexical_vector(right)
-        return "lexical-fallback", cosine_counter_similarity(left_counter, right_counter)
-
-    backend_name = left_backend if left_backend == right_backend else "mixed"
-    return backend_name, cosine_dense_similarity(left_vector, right_vector)
-
-
 def embedding_score(puzzle: dict[str, Any]) -> dict[str, Any]:
     """Measure within-group cohesion and cross-group confusion."""
     within_group_scores: list[float] = []
     cross_group_scores: list[float] = []
-    backend_names: Counter[str] = Counter()
+    backend_counts: Counter[str] = Counter()
     groups = list(puzzle.get("groups", []))
 
     for group in groups:
         for left_word, right_word in combinations(group.get("words", []), 2):
-            backend_name, similarity = pairwise_similarity(str(left_word), str(right_word))
-            backend_names.update([backend_name])
+            backend_name, similarity = text_similarity(str(left_word), str(right_word))
+            backend_counts.update([backend_name])
             within_group_scores.append(similarity)
 
     for left_index, left_group in enumerate(groups):
         for right_group in groups[left_index + 1 :]:
             for left_word in left_group.get("words", []):
                 for right_word in right_group.get("words", []):
-                    backend_name, similarity = pairwise_similarity(str(left_word), str(right_word))
-                    backend_names.update([backend_name])
+                    backend_name, similarity = text_similarity(str(left_word), str(right_word))
+                    backend_counts.update([backend_name])
                     cross_group_scores.append(similarity)
 
     average_within = sum(within_group_scores) / len(within_group_scores) if within_group_scores else 0.0
     average_cross = sum(cross_group_scores) / len(cross_group_scores) if cross_group_scores else 0.0
 
     return {
-        "backend": backend_names.most_common(1)[0][0] if backend_names else "unknown",
+        "backend": backend_counts.most_common(1)[0][0] if backend_counts else "unknown",
         "average_within_group_similarity": average_within,
         "average_cross_group_similarity": average_cross,
         "within_pair_count": len(within_group_scores),
@@ -584,11 +509,14 @@ def validate_puzzle(
     official_puzzles: list[dict[str, Any]] | None = None,
     config: ValidationConfig | None = None,
 ) -> dict[str, Any]:
-    """Run the full v2 validation stack and return detailed results."""
+    """Run the full v4 validation stack and return detailed results."""
     validation_config = config or ValidationConfig()
+    puzzle_analysis = analyze_puzzle_groups([{**group, "words": list(group.get("words", []))} for group in puzzle.get("groups", [])])
     structure_reasons = validate_structure(puzzle)
     style_reasons = validate_style(puzzle)
-    ambiguity_reasons = validate_ambiguity_and_overlap(puzzle)
+    ambiguity_reasons = dedupe_reasons(_surface_ambiguity_reasons(puzzle) + _ambiguity_reasons_from_analysis(puzzle_analysis))
+    difficulty_reasons = _difficulty_reasons_from_analysis(puzzle_analysis, validation_config)
+    singleton_reasons = _singleton_reasons_from_analysis(puzzle_analysis)
 
     duplicate_reasons: list[str] = []
     if official_puzzles is not None and exact_duplicate_check(puzzle, official_puzzles):
@@ -625,6 +553,8 @@ def validate_puzzle(
         "structure": structure_reasons,
         "style": style_reasons,
         "ambiguity": ambiguity_reasons,
+        "difficulty": difficulty_reasons,
+        "singleton": singleton_reasons,
         "duplicate": duplicate_reasons,
         "multi_solution": multi_solution_reasons,
         "low_cohesion": low_cohesion_reasons,
@@ -636,6 +566,13 @@ def validate_puzzle(
         "reason_groups": reason_groups,
         "metrics": {
             "solution_count": solution_count,
+            "puzzle_difficulty": puzzle_analysis["puzzle_difficulty"],
+            "base_tiers": puzzle_analysis["base_tiers"],
+            "effective_tiers": puzzle_analysis["effective_tiers"],
+            "interference_score": puzzle_analysis["interference_score"],
+            "decoy_group_count": puzzle_analysis["decoy_group_count"],
+            "ambiguous_word_count": len(puzzle_analysis["ambiguous_words"]),
+            "singleton_word_count": len(puzzle_analysis["singleton_words"]),
             **similarity_metrics,
         },
     }
@@ -653,9 +590,12 @@ def first_failure_stage(validation_result: dict[str, Any]) -> str | None:
 
 
 def collect_validation_report(puzzle: dict[str, Any]) -> dict[str, list[str]]:
-    """Preserve the lightweight v1 report format."""
+    """Preserve a lightweight human-readable validation report."""
+    config = ValidationConfig()
     return {
         "structure": validate_structure(puzzle),
         "style": validate_style(puzzle),
         "ambiguity": validate_ambiguity_and_overlap(puzzle),
+        "difficulty": validate_difficulty_profile(puzzle, config),
+        "singleton": validate_singleton_words(puzzle),
     }

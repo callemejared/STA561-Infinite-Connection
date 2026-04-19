@@ -1,0 +1,5 @@
+# Overly broad or semantically empty form patterns to suppress during v4 generation.
+THE
+AND
+FOR
+WITH
