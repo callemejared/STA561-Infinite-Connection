@@ -365,373 +365,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000005",
-    "source": "generated_v4",
-    "groups": [
-      {
-        "label": "Rhymes with HAD",
-        "type": "form",
-        "words": [
-          "ADD",
-          "BAD",
-          "CHAD",
-          "DAD"
-        ],
-        "metadata": {
-          "subtype": "rhyme",
-          "pattern_value": "AE1 D",
-          "pattern_match_count": 12,
-          "pattern_coverage": 0.002186987424822307,
-          "rhyme_ending": "AE1 D",
-          "rhyme_target": "HAD",
-          "rhyme_frequency": 12,
-          "broad_category_flags": {},
-          "sampling_weight": 0.006944444444444444
-        },
-        "difficulty": {
-          "component": "pattern_rarity",
-          "raw_score": 0.08333333333333333,
-          "score": 0.20108695652173916,
-          "tier": "easy"
-        }
-      },
-      {
-        "label": "SEEN IN A KITCHEN",
-        "type": "theme",
-        "words": [
-          "COUNTER",
-          "FRIDGE",
-          "RANGE",
-          "SINK"
-        ],
-        "source_puzzle_id": "nyt_0510",
-        "difficulty": {
-          "component": "theme_distractibility",
-          "raw_score": 3016.0,
-          "score": 0.971841704718417,
-          "tier": "hard"
-        },
-        "metadata": {
-          "broad_category_flags": {},
-          "self_revealing_words": [],
-          "global_distractibility": 3016.0
-        }
-      },
-      {
-        "label": "WORDS AFTER “DEEP”",
-        "type": "theme",
-        "words": [
-          "CUT",
-          "FAKE",
-          "FREEZE",
-          "SIX"
-        ],
-        "source_puzzle_id": "nyt_0280",
-        "difficulty": {
-          "component": "theme_distractibility",
-          "raw_score": 2788.0,
-          "score": 0.8850837138508372,
-          "tier": "hard"
-        },
-        "metadata": {
-          "broad_category_flags": {},
-          "self_revealing_words": [],
-          "global_distractibility": 2788.0
-        }
-      },
-      {
-        "label": "CRUSH INTO A COMPACT SHAPE",
-        "type": "semantic",
-        "words": [
-          "BALL",
-          "CRUMPLE",
-          "SCRUNCH",
-          "WAD"
-        ],
-        "source_puzzle_id": "nyt_0573",
-        "difficulty": {
-          "component": "wordnet_depth",
-          "raw_score": 11.0,
-          "score": 0.6470588235294118,
-          "tier": "medium"
-        },
-        "metadata": {
-          "broad_category_flags": {},
-          "self_revealing_words": [],
-          "wordnet_depth": 11.0
-        }
-      }
-    ],
-    "all_words": [
-      "ADD",
-      "BAD",
-      "CHAD",
-      "DAD",
-      "COUNTER",
-      "FRIDGE",
-      "RANGE",
-      "SINK",
-      "CUT",
-      "FAKE",
-      "FREEZE",
-      "SIX",
-      "BALL",
-      "CRUMPLE",
-      "SCRUNCH",
-      "WAD"
-    ],
-    "seed": 561,
-    "difficulty": {
-      "group_scores": [
-        0.201,
-        0.819,
-        0.776,
-        0.647
-      ],
-      "group_tiers": [
-        "easy",
-        "hard",
-        "hard",
-        "medium"
-      ],
-      "effective_tiers": [
-        "easy",
-        "hard",
-        "hard",
-        "medium"
-      ],
-      "puzzle_score": 0.611
-    },
-    "analysis": {
-      "interference_score": 19.357,
-      "decoy_group_count": 4,
-      "pair_details": [
-        {
-          "left_label": "Rhymes with HAD",
-          "right_label": "SEEN IN A KITCHEN",
-          "overlap_count": 6,
-          "overlap_score": 3.18
-        },
-        {
-          "left_label": "Rhymes with HAD",
-          "right_label": "WORDS AFTER “DEEP”",
-          "overlap_count": 8,
-          "overlap_score": 4.401
-        },
-        {
-          "left_label": "Rhymes with HAD",
-          "right_label": "CRUSH INTO A COMPACT SHAPE",
-          "overlap_count": 4,
-          "overlap_score": 2.234
-        },
-        {
-          "left_label": "SEEN IN A KITCHEN",
-          "right_label": "WORDS AFTER “DEEP”",
-          "overlap_count": 7,
-          "overlap_score": 4.003
-        },
-        {
-          "left_label": "SEEN IN A KITCHEN",
-          "right_label": "CRUSH INTO A COMPACT SHAPE",
-          "overlap_count": 5,
-          "overlap_score": 2.57
-        },
-        {
-          "left_label": "WORDS AFTER “DEEP”",
-          "right_label": "CRUSH INTO A COMPACT SHAPE",
-          "overlap_count": 5,
-          "overlap_score": 2.97
-        }
-      ],
-      "group_decoys": [
-        [
-          {
-            "word": "ADD",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.6
-          },
-          {
-            "word": "ADD",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.595
-          },
-          {
-            "word": "ADD",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.615
-          },
-          {
-            "word": "BAD",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.681
-          },
-          {
-            "word": "BAD",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.695
-          },
-          {
-            "word": "BAD",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.596
-          },
-          {
-            "word": "CHAD",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.345
-          },
-          {
-            "word": "DAD",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.513
-          },
-          {
-            "word": "DAD",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.461
-          },
-          {
-            "word": "DAD",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.41
-          }
-        ],
-        [
-          {
-            "word": "COUNTER",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.486
-          },
-          {
-            "word": "COUNTER",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.553
-          },
-          {
-            "word": "COUNTER",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.634
-          },
-          {
-            "word": "FRIDGE",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.24
-          },
-          {
-            "word": "RANGE",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.553
-          },
-          {
-            "word": "RANGE",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.591
-          },
-          {
-            "word": "RANGE",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.633
-          },
-          {
-            "word": "SINK",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.349
-          },
-          {
-            "word": "SINK",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.509
-          },
-          {
-            "word": "SINK",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.476
-          }
-        ],
-        [
-          {
-            "word": "CUT",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.658
-          },
-          {
-            "word": "CUT",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.724
-          },
-          {
-            "word": "CUT",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.746
-          },
-          {
-            "word": "FAKE",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.543
-          },
-          {
-            "word": "FAKE",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.483
-          },
-          {
-            "word": "FAKE",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.476
-          },
-          {
-            "word": "FREEZE",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.333
-          },
-          {
-            "word": "FREEZE",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.422
-          },
-          {
-            "word": "FREEZE",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.471
-          },
-          {
-            "word": "SIX",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.771
-          },
-          {
-            "word": "SIX",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.721
-          },
-          {
-            "word": "SIX",
-            "competing_label": "CRUSH INTO A COMPACT SHAPE",
-            "score": 0.662
-          }
-        ],
-        [
-          {
-            "word": "BALL",
-            "competing_label": "Rhymes with HAD",
-            "score": 0.612
-          },
-          {
-            "word": "BALL",
-            "competing_label": "SEEN IN A KITCHEN",
-            "score": 0.586
-          },
-          {
-            "word": "BALL",
-            "competing_label": "WORDS AFTER “DEEP”",
-            "score": 0.615
-          }
-        ]
-      ]
-    }
-  },
-  {
-    "puzzle_id": "gen_v4_000008",
+    "puzzle_id": "gen_v4_000007",
     "source": "generated_v4",
     "groups": [
       {
@@ -1086,7 +720,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000009",
+    "puzzle_id": "gen_v4_000008",
     "source": "generated_v4",
     "groups": [
       {
@@ -1452,7 +1086,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000011",
+    "puzzle_id": "gen_v4_000010",
     "source": "generated_v4",
     "groups": [
       {
@@ -1823,7 +1457,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000012",
+    "puzzle_id": "gen_v4_000011",
     "source": "generated_v4",
     "groups": [
       {
@@ -2159,7 +1793,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000014",
+    "puzzle_id": "gen_v4_000013",
     "source": "generated_v4",
     "groups": [
       {
@@ -2510,7 +2144,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000015",
+    "puzzle_id": "gen_v4_000014",
     "source": "generated_v4",
     "groups": [
       {
@@ -2845,7 +2479,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000017",
+    "puzzle_id": "gen_v4_000016",
     "source": "generated_v4",
     "groups": [
       {
@@ -3176,7 +2810,7 @@
     }
   },
   {
-    "puzzle_id": "gen_v4_000019",
+    "puzzle_id": "gen_v4_000018",
     "source": "generated_v4",
     "groups": [
       {
@@ -3501,6 +3135,392 @@
             "word": "OUTLINE",
             "competing_label": "AT SOME FUTURE POINT",
             "score": 0.42
+          }
+        ]
+      ]
+    }
+  },
+  {
+    "puzzle_id": "gen_v4_000019",
+    "source": "generated_v4",
+    "groups": [
+      {
+        "label": "SPOKEN COMMUNICATION",
+        "type": "semantic",
+        "words": [
+          "DIALECT",
+          "LANGUAGE",
+          "SPEECH",
+          "TONGUE"
+        ],
+        "source_puzzle_id": "nyt_0433",
+        "difficulty": {
+          "component": "wordnet_depth",
+          "raw_score": 5.0,
+          "score": 0.29411764705882354,
+          "tier": "easy"
+        },
+        "metadata": {
+          "broad_category_flags": {},
+          "self_revealing_words": [],
+          "wordnet_depth": 5.0
+        }
+      },
+      {
+        "label": "SEEN IN A PASSPORT",
+        "type": "theme",
+        "words": [
+          "NAME",
+          "PHOTO",
+          "STAMP",
+          "VISA"
+        ],
+        "source_puzzle_id": "nyt_0286",
+        "difficulty": {
+          "component": "theme_distractibility",
+          "raw_score": 2727.0,
+          "score": 0.8618721461187214,
+          "tier": "hard"
+        },
+        "metadata": {
+          "broad_category_flags": {},
+          "self_revealing_words": [],
+          "global_distractibility": 2727.0
+        }
+      },
+      {
+        "label": "RETAIL CHAINS WITH A LETTER CHANGED",
+        "type": "form",
+        "words": [
+          "BEST BOY",
+          "IDEA",
+          "KRONER",
+          "STABLES"
+        ],
+        "source_puzzle_id": "nyt_0507",
+        "metadata": {
+          "subtype": "pattern",
+          "pattern_value": null,
+          "pattern_match_count": 4,
+          "pattern_coverage": 0.0,
+          "rhyme_ending": null,
+          "rhyme_target": null,
+          "broad_category_flags": {},
+          "sampling_weight": 0.25
+        },
+        "difficulty": {
+          "component": "pattern_rarity",
+          "raw_score": 0.25,
+          "score": 0.7336956521739132,
+          "tier": "hard"
+        }
+      },
+      {
+        "label": "Rhymes with STYLE",
+        "type": "form",
+        "words": [
+          "FILE",
+          "MILE",
+          "PILE",
+          "SMILE"
+        ],
+        "metadata": {
+          "subtype": "rhyme",
+          "pattern_value": "AY1 L",
+          "pattern_match_count": 7,
+          "pattern_coverage": 0.0012757426644796792,
+          "rhyme_ending": "AY1 L",
+          "rhyme_target": "STYLE",
+          "rhyme_frequency": 7,
+          "broad_category_flags": {},
+          "sampling_weight": 0.02040816326530612
+        },
+        "difficulty": {
+          "component": "pattern_rarity",
+          "raw_score": 0.14285714285714285,
+          "score": 0.391304347826087,
+          "tier": "medium"
+        }
+      }
+    ],
+    "all_words": [
+      "DIALECT",
+      "LANGUAGE",
+      "SPEECH",
+      "TONGUE",
+      "NAME",
+      "PHOTO",
+      "STAMP",
+      "VISA",
+      "BEST BOY",
+      "IDEA",
+      "KRONER",
+      "STABLES",
+      "FILE",
+      "MILE",
+      "PILE",
+      "SMILE"
+    ],
+    "seed": 561,
+    "difficulty": {
+      "group_scores": [
+        0.294,
+        0.848,
+        0.734,
+        0.391
+      ],
+      "group_tiers": [
+        "easy",
+        "hard",
+        "hard",
+        "medium"
+      ],
+      "effective_tiers": [
+        "easy",
+        "hard",
+        "hard",
+        "medium"
+      ],
+      "puzzle_score": 0.567
+    },
+    "analysis": {
+      "interference_score": 18.627,
+      "decoy_group_count": 4,
+      "pair_details": [
+        {
+          "left_label": "SPOKEN COMMUNICATION",
+          "right_label": "SEEN IN A PASSPORT",
+          "overlap_count": 7,
+          "overlap_score": 3.087
+        },
+        {
+          "left_label": "SPOKEN COMMUNICATION",
+          "right_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+          "overlap_count": 6,
+          "overlap_score": 2.911
+        },
+        {
+          "left_label": "SPOKEN COMMUNICATION",
+          "right_label": "Rhymes with STYLE",
+          "overlap_count": 6,
+          "overlap_score": 3.004
+        },
+        {
+          "left_label": "SEEN IN A PASSPORT",
+          "right_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+          "overlap_count": 6,
+          "overlap_score": 3.495
+        },
+        {
+          "left_label": "SEEN IN A PASSPORT",
+          "right_label": "Rhymes with STYLE",
+          "overlap_count": 7,
+          "overlap_score": 3.115
+        },
+        {
+          "left_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+          "right_label": "Rhymes with STYLE",
+          "overlap_count": 6,
+          "overlap_score": 3.014
+        }
+      ],
+      "group_decoys": [
+        [
+          {
+            "word": "DIALECT",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.265
+          },
+          {
+            "word": "DIALECT",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.276
+          },
+          {
+            "word": "DIALECT",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.485
+          },
+          {
+            "word": "LANGUAGE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.581
+          },
+          {
+            "word": "LANGUAGE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.532
+          },
+          {
+            "word": "LANGUAGE",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.63
+          },
+          {
+            "word": "SPEECH",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.599
+          },
+          {
+            "word": "SPEECH",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.588
+          },
+          {
+            "word": "SPEECH",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.558
+          },
+          {
+            "word": "TONGUE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.429
+          },
+          {
+            "word": "TONGUE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.392
+          },
+          {
+            "word": "TONGUE",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.565
+          }
+        ],
+        [
+          {
+            "word": "NAME",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.572
+          },
+          {
+            "word": "NAME",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.726
+          },
+          {
+            "word": "NAME",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.619
+          },
+          {
+            "word": "PHOTO",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.323
+          },
+          {
+            "word": "PHOTO",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.508
+          },
+          {
+            "word": "PHOTO",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.429
+          },
+          {
+            "word": "STAMP",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.438
+          },
+          {
+            "word": "STAMP",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.279
+          },
+          {
+            "word": "VISA",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.317
+          },
+          {
+            "word": "VISA",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.366
+          }
+        ],
+        [
+          {
+            "word": "BEST BOY",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.488
+          },
+          {
+            "word": "BEST BOY",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.742
+          },
+          {
+            "word": "BEST BOY",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.712
+          },
+          {
+            "word": "IDEA",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.635
+          },
+          {
+            "word": "IDEA",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.715
+          },
+          {
+            "word": "IDEA",
+            "competing_label": "Rhymes with STYLE",
+            "score": 0.651
+          }
+        ],
+        [
+          {
+            "word": "FILE",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.408
+          },
+          {
+            "word": "FILE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.527
+          },
+          {
+            "word": "FILE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.556
+          },
+          {
+            "word": "MILE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.46
+          },
+          {
+            "word": "MILE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.351
+          },
+          {
+            "word": "PILE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.393
+          },
+          {
+            "word": "PILE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.367
+          },
+          {
+            "word": "SMILE",
+            "competing_label": "SPOKEN COMMUNICATION",
+            "score": 0.358
+          },
+          {
+            "word": "SMILE",
+            "competing_label": "SEEN IN A PASSPORT",
+            "score": 0.407
+          },
+          {
+            "word": "SMILE",
+            "competing_label": "RETAIL CHAINS WITH A LETTER CHANGED",
+            "score": 0.377
           }
         ]
       ]

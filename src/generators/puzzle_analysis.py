@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from functools import lru_cache
 from itertools import combinations
 from typing import Any
 
@@ -17,33 +18,96 @@ PUZZLE_DIFFICULTY_RANGE = (0.35, 0.68)
 MIN_INTERFERENCE_SCORE = 2.25
 
 
-def pattern_match_score(word: str, group: dict[str, Any]) -> float:
-    """Return a lightweight score when a word matches a form group's pattern."""
+def _group_signature(group: dict[str, Any]) -> tuple[str, str | None, str | None, str | None]:
+    """Return the stable fields needed for cached affinity checks."""
     metadata = group.get("metadata", {})
-    subtype = metadata.get("subtype")
-    pattern_value = metadata.get("pattern_value")
+    return (
+        str(group["label"]),
+        str(metadata.get("subtype")) if metadata.get("subtype") is not None else None,
+        str(metadata.get("pattern_value")) if metadata.get("pattern_value") is not None else None,
+        str(metadata.get("rhyme_ending")) if metadata.get("rhyme_ending") is not None else None,
+    )
+
+
+def _visual_rhyme_tail(group: dict[str, Any]) -> str | None:
+    """Return a target-centered spelling tail when a rhyme family is visually obvious."""
+    metadata = group.get("metadata", {})
+
+    if metadata.get("subtype") != "rhyme":
+        return None
+
+    target = metadata.get("rhyme_target")
+
+    if target:
+        target_key = normalize_word_key(str(target))
+    else:
+        return None
+
+    group_keys = [normalize_word_key(word) for word in group.get("words", [])]
+
+    for tail_length in (3, 2):
+        if len(target_key) < tail_length:
+            continue
+
+        candidate_tail = target_key[-tail_length:]
+        overlap_count = sum(1 for key in group_keys if key.endswith(candidate_tail))
+
+        if overlap_count >= 2:
+            return candidate_tail
+
+    return None
+
+
+@lru_cache(maxsize=262144)
+def _cached_pattern_match_score(
+    word: str,
+    subtype: str | None,
+    pattern_value: str | None,
+    rhyme_value: str | None,
+) -> float:
+    """Return a cached score when a word matches one form pattern."""
     normalized_word = normalize_word_key(word)
 
-    if subtype == "prefix" and pattern_value and normalized_word.startswith(str(pattern_value)):
+    if subtype == "prefix" and pattern_value and normalized_word.startswith(pattern_value):
         return 0.62
-    if subtype == "suffix" and pattern_value and normalized_word.endswith(str(pattern_value)):
+    if subtype == "suffix" and pattern_value and normalized_word.endswith(pattern_value):
         return 0.62
-    if subtype == "rhyme" and metadata.get("rhyme_ending") and rhyme_ending(word) == metadata["rhyme_ending"]:
+    if subtype == "rhyme" and rhyme_value and rhyme_ending(word) == rhyme_value:
         return 0.60
-    if subtype == "homophone" and pattern_value and str(pattern_value) in pronunciation_list(word):
+    if subtype == "homophone" and pattern_value and pattern_value in pronunciation_list(word):
         return 0.60
-    if subtype == "anagram" and pattern_value and "".join(sorted(normalized_word)) == str(pattern_value):
+    if subtype == "anagram" and pattern_value and "".join(sorted(normalized_word)) == pattern_value:
         return 0.60
 
     return 0.0
 
 
+def pattern_match_score(word: str, group: dict[str, Any]) -> float:
+    """Return a lightweight score when a word matches a form group's pattern."""
+    _, subtype, pattern_value, rhyme_value = _group_signature(group)
+    return _cached_pattern_match_score(word, subtype, pattern_value, rhyme_value)
+
+
+@lru_cache(maxsize=262144)
+def _cached_word_group_affinity(
+    word: str,
+    label: str,
+    subtype: str | None,
+    pattern_value: str | None,
+    rhyme_value: str | None,
+) -> float:
+    """Cache one word-to-group affinity score."""
+    _, label_similarity = text_similarity(word, label)
+    return max(label_similarity, _cached_pattern_match_score(word, subtype, pattern_value, rhyme_value))
+
+
 def word_group_affinity(word: str, group: dict[str, Any]) -> float:
     """Score how strongly one word points toward a group's label or form pattern."""
-    _, label_similarity = text_similarity(word, str(group["label"]))
-    return max(label_similarity, pattern_match_score(word, group))
+    label, subtype, pattern_value, rhyme_value = _group_signature(group)
+    return _cached_word_group_affinity(word, label, subtype, pattern_value, rhyme_value)
 
 
+@lru_cache(maxsize=131072)
 def cross_word_link_score(left_word: str, right_word: str) -> float:
     """Measure how much two words from different groups could be linked by a solver."""
     _, similarity = text_similarity(left_word, right_word)
@@ -75,6 +139,7 @@ def analyze_puzzle_groups(groups: list[dict[str, Any]]) -> dict[str, Any]:
     group_decoys: list[list[dict[str, Any]]] = []
     ambiguous_words: list[dict[str, Any]] = []
     singleton_words: list[dict[str, Any]] = []
+    outside_form_matches: list[dict[str, Any]] = []
     pair_overlap_counts: dict[tuple[int, int], int] = defaultdict(int)
     pair_overlap_scores: dict[tuple[int, int], float] = defaultdict(float)
 
@@ -93,6 +158,39 @@ def analyze_puzzle_groups(groups: list[dict[str, Any]]) -> dict[str, Any]:
         group_decoy_hits: list[dict[str, Any]] = []
         effective_scores.append(effective_score)
         effective_tiers.append("easy" if effective_score < 0.34 else "medium" if effective_score < 0.67 else "hard")
+
+        if str(group["type"]) == "form":
+            visual_rhyme_tail = _visual_rhyme_tail(group)
+
+            for other_index, other_group in enumerate(groups):
+                if other_index == group_index:
+                    continue
+
+                for other_word in other_group["words"]:
+                    pattern_score = pattern_match_score(str(other_word), group)
+
+                    if pattern_score >= 0.60:
+                        outside_form_matches.append(
+                            {
+                                "word": str(other_word),
+                                "form_label": str(group["label"]),
+                                "group_label": str(other_group["label"]),
+                                "match_type": "pattern",
+                                "score": round(pattern_score, 3),
+                            }
+                        )
+                        continue
+
+                    if visual_rhyme_tail and normalize_word_key(str(other_word)).endswith(visual_rhyme_tail):
+                        outside_form_matches.append(
+                            {
+                                "word": str(other_word),
+                                "form_label": str(group["label"]),
+                                "group_label": str(other_group["label"]),
+                                "match_type": "visual_tail",
+                                "score": round(float(len(visual_rhyme_tail)) / 10.0, 3),
+                            }
+                        )
 
         for word in group["words"]:
             own_affinity = word_group_affinity(str(word), group)
@@ -172,6 +270,7 @@ def analyze_puzzle_groups(groups: list[dict[str, Any]]) -> dict[str, Any]:
         "group_decoys": group_decoys,
         "ambiguous_words": ambiguous_words,
         "singleton_words": singleton_words,
+        "outside_form_matches": outside_form_matches,
         "pair_details": pair_details,
         "interference_score": sum(pair_overlap_scores.values()),
         "decoy_group_count": sum(1 for decoys in group_decoys if decoys),

@@ -13,7 +13,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 ACCEPTED_PUZZLES_PATH = PROJECT_ROOT / "data" / "generated" / "accepted_v4.json"
 ANSWER_COLORS = ["#f9dc5c", "#8cc084", "#6aa6ff", "#9b72cf"]
 LIBRARY_BENCHMARK_ACCEPTED = 10
-LIBRARY_BENCHMARK_SECONDS = 427.4
+LIBRARY_BENCHMARK_SECONDS = 356.6
 SECONDS_PER_ACCEPTED_PUZZLE = LIBRARY_BENCHMARK_SECONDS / LIBRARY_BENCHMARK_ACCEPTED
 ESTIMATED_LIBRARY_BUILD_HOURS = (SECONDS_PER_ACCEPTED_PUZZLE * 10_000) / 3600
 
@@ -23,6 +23,7 @@ if str(SRC_ROOT) not in sys.path:
 import streamlit as st
 
 from generators.generator_resources import detect_form_subtype
+from generators.puzzle_analysis import analyze_puzzle_groups
 
 st.set_page_config(page_title="Infinite Connections v4", page_icon=":puzzle_piece:", layout="centered")
 
@@ -50,7 +51,11 @@ def is_allowed_library_puzzle(puzzle: dict[str, Any]) -> bool:
     if len(groups) != 4:
         return False
 
-    return not any(is_trivial_form_group(group) for group in groups)
+    if any(is_trivial_form_group(group) for group in groups):
+        return False
+
+    analysis = analyze_puzzle_groups([{**group, "words": list(group.get("words", []))} for group in groups])
+    return not analysis.get("outside_form_matches")
 
 
 @st.cache_data(show_spinner=False)

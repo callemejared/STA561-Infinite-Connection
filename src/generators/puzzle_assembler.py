@@ -256,6 +256,8 @@ def generate_candidate_puzzle_v4(
             continue
         if analysis["ambiguous_words"]:
             continue
+        if analysis["outside_form_matches"]:
+            continue
         if analysis["singleton_words"]:
             continue
         if analysis["interference_score"] < MIN_INTERFERENCE_SCORE:

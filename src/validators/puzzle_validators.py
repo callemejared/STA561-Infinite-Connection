@@ -335,6 +335,18 @@ def _ambiguity_reasons_from_analysis(analysis: dict[str, Any]) -> list[str]:
             f"more strongly than its own label '{ambiguous_word['own_label']}'"
         )
 
+    for outside_match in analysis.get("outside_form_matches", [])[:4]:
+        if outside_match.get("match_type") == "visual_tail":
+            reasons.append(
+                f"word '{outside_match['word']}' from '{outside_match['group_label']}' visually overlaps too strongly "
+                f"with the rhyme group '{outside_match['form_label']}'"
+            )
+        else:
+            reasons.append(
+                f"word '{outside_match['word']}' from '{outside_match['group_label']}' also matches the form group "
+                f"'{outside_match['form_label']}'"
+            )
+
     return reasons
 
 
@@ -572,6 +584,7 @@ def validate_puzzle(
             "interference_score": puzzle_analysis["interference_score"],
             "decoy_group_count": puzzle_analysis["decoy_group_count"],
             "ambiguous_word_count": len(puzzle_analysis["ambiguous_words"]),
+            "outside_form_match_count": len(puzzle_analysis.get("outside_form_matches", [])),
             "singleton_word_count": len(puzzle_analysis["singleton_words"]),
             **similarity_metrics,
         },

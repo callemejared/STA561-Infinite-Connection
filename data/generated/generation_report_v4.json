@@ -6,7 +6,7 @@
     "form": 339,
     "theme": 138
   },
-  "candidate_budget": 80,
+  "candidate_budget": 30,
   "target_accepted_count": 10,
   "total_candidates_generated": 19,
   "accepted_count": 10,
@@ -24,20 +24,20 @@
   "rejected_by_internal_repeat": 0,
   "rejected_by_generation_error": 0,
   "candidate_group_type_counts": {
-    "theme": 23,
-    "form": 25,
+    "theme": 22,
+    "form": 26,
     "semantic": 28
   },
   "accepted_group_type_counts": {
-    "theme": 13,
-    "form": 14,
+    "theme": 12,
+    "form": 15,
     "semantic": 13
   },
-  "average_within_group_similarity": 0.32147044098924427,
-  "average_cross_group_similarity": 0.21650350533978804,
+  "average_within_group_similarity": 0.32278955354735217,
+  "average_cross_group_similarity": 0.21477970564027285,
   "average_solution_count": 1.0,
-  "average_puzzle_difficulty": 0.5924019218566918,
-  "average_interference_score": 15.718417623371318,
+  "average_puzzle_difficulty": 0.5879880526262521,
+  "average_interference_score": 15.645377392222096,
   "top_structure_reasons": {},
   "top_style_reasons": {},
   "top_ambiguity_reasons": {},
